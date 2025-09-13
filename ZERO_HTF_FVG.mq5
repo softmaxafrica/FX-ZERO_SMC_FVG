@@ -1,11 +1,15 @@
- 
+//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+
 #property copyright "Zero"
 #property strict
 #property version   "1.0"
 
 #include <Trade/Trade.mqh>
 
- 
 // ======================================================================
 // 1) CHART STYLE & HELPER WIDGET  — purely visual (no trading impact)
 // ======================================================================
@@ -18,9 +22,6 @@ color Inp_Color_BarDown     = clrRed;
 color Inp_Color_BearCandle  = clrRed;
 color Inp_Color_BidLine     = clrRed;
 color Inp_Color_AskLine     = clrAqua;
-
-// (Help panel removed)
-
 
 // ======================================================================
 // 2) HTF FVG SCANNER & ZONE DISCOVERY  — controls what zones exist
@@ -54,6 +55,9 @@ input color  Inp_BearColor       = clrYellow;
 input int    Inp_FillAlpha       = 40;
 input string Inp_ObjectPrefix    = "ZERO_FVG";
 input int    Inp_MaxSignalLabels = 50;
+// Per-zone info labels (gap size & momentum)
+input bool   Inp_ShowFVGInfo     = true;
+input int    Inp_FVGInfoFontSize = 20;
 
 
 // ======================================================================
@@ -83,14 +87,14 @@ input bool         Inp_SoftBOS               = false;         // If BOS cannot b
 // ---- HTF Bias filter (H1 & H4) ----
 
 // Touch/backfill rules
-const bool Inp_OnlyTradeOnFreshTouch = true;   
+const bool Inp_OnlyTradeOnFreshTouch = true;
 const bool Inp_DoNotTradeBackfill    = true;
 input bool Inp_AllowMultiplePerZone  = false;
 input bool Inp_AllowDuplicateSidePositions = true;
-  bool Inp_KeepSeekingAfterTouch = true;   
-  bool Inp_TradeOnlyVisibleZones = false;    
-input   bool Inp_FirstTouchStrict      = false;   
-input   bool Inp_StartOnCloseInside    = true;   
+bool Inp_KeepSeekingAfterTouch = true;
+bool Inp_TradeOnlyVisibleZones = false;
+input   bool Inp_FirstTouchStrict      = false;
+input   bool Inp_StartOnCloseInside    = true;
 
 
 // ======================================================================
@@ -167,9 +171,9 @@ input bool Inp_ShowLabels        = true;
 input bool Inp_ShowArrows        = true;
 input int  Inp_MaxSignalsOnChart = 100;
 input int  Inp_SignalKeepBars    = 200;
-input int  Inp_LabelYStepPoints  = 15;
-input int  Inp_LabelWrapChars    = 1000;
-input int  Inp_LabelLineStepPoints = 100;
+const int  Inp_LabelYStepPoints  = 55;
+const int  Inp_LabelWrapChars    = 100;
+const int  Inp_LabelLineStepPoints = 5000;
 
 enum ELabelDetail { Label_Off=0, Label_Basic=1, Label_Full=2 };
 input ELabelDetail Inp_LabelDetail = Label_Full;
@@ -287,9 +291,13 @@ int             g_ftShiftActive = -1;              // when >=1, confirmations ma
 
 // ========== SIMPLE OPERATIONS TEXT LOGGER ==========
 string OpsTxtName() { return StringFormat("ZERO_OPS_%s.txt", _Symbol); }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void OpsLog(const string line)
   {
-   if(!Inp_SaveOpsToText) return;
+   if(!Inp_SaveOpsToText)
+      return;
    int h = FileOpen(OpsTxtName(), FILE_READ|FILE_WRITE|FILE_TXT|FILE_SHARE_READ);
    if(h==INVALID_HANDLE)
       h = FileOpen(OpsTxtName(), FILE_WRITE|FILE_TXT|FILE_SHARE_READ);
@@ -450,32 +458,55 @@ ValidatedZoneKey g_validated[];
 
 #define MG_SHIFT 16
 ulong MG_BASE() { return (ulong)Inp_Magic; }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool  MagicIsOurs(long mg)
   {
    ulong umg=(ulong)mg;
    return ((umg>>MG_SHIFT)==MG_BASE()) || (umg==MG_BASE());
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 ulong MagicPack(uchar flags7, uchar pairIdx, uchar bosType)
   {
    return (MG_BASE()<<MG_SHIFT) | ((ulong)(bosType & 0x3)<<10) | ((ulong)(pairIdx & 0x7)<<7) | (ulong)(flags7 & 0x7F);
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 uchar MagicFlags(ulong mg)   { return (uchar)(mg & 0x7F); }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 uchar MagicPair(ulong mg)    { return (uchar)((mg>>7) & 0x7); }
 uchar MagicBOSType(ulong mg) { return (uchar)((mg>>10) & 0x3); }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void BuildConfirmBits(const string &confirm, uchar &flags7, uchar &pairIdx)
   {
-   flags7=0; pairIdx=0;
+   flags7=0;
+   pairIdx=0;
    string src = Upper(Trim(confirm));
-   if(StringFind(src, "ENGULF")>=0) flags7 |= (1<<0);
-   if(StringFind(src, "MFVG")  >=0) flags7 |= (1<<1);
-   if(StringFind(src, "WICK")  >=0) flags7 |= (1<<2);
-   if(StringFind(src, "BOS")   >=0) flags7 |= (1<<3);
-   if(StringFind(src, "SFP")   >=0) flags7 |= (1<<4);
-   if(StringFind(src, "RETEST")>=0) flags7 |= (1<<5);
-   if(StringFind(src, "IB")    >=0) flags7 |= (1<<6);
+   if(StringFind(src, "ENGULF")>=0)
+      flags7 |= (1<<0);
+   if(StringFind(src, "MFVG")  >=0)
+      flags7 |= (1<<1);
+   if(StringFind(src, "WICK")  >=0)
+      flags7 |= (1<<2);
+   if(StringFind(src, "BOS")   >=0)
+      flags7 |= (1<<3);
+   if(StringFind(src, "SFP")   >=0)
+      flags7 |= (1<<4);
+   if(StringFind(src, "RETEST")>=0)
+      flags7 |= (1<<5);
+   if(StringFind(src, "IB")    >=0)
+      flags7 |= (1<<6);
 
-   // try to match a configured pair (1..6)
+// try to match a configured pair (1..6)
    int plus = StringFind(src, "+");
    if(plus>0)
      {
@@ -486,43 +517,65 @@ void BuildConfirmBits(const string &confirm, uchar &flags7, uchar &pairIdx)
       if(confA>=0 && confB>=0)
         {
          int a[6] = { (int)Inp_ConfirmPair1_A, (int)Inp_ConfirmPair2_A, (int)Inp_ConfirmPair3_A,
-                      (int)Inp_ConfirmPair4_A, (int)Inp_ConfirmPair5_A, (int)Inp_ConfirmPair6_A };
+                      (int)Inp_ConfirmPair4_A, (int)Inp_ConfirmPair5_A, (int)Inp_ConfirmPair6_A
+                    };
          int b[6] = { (int)Inp_ConfirmPair1_B, (int)Inp_ConfirmPair2_B, (int)Inp_ConfirmPair3_B,
-                      (int)Inp_ConfirmPair4_B, (int)Inp_ConfirmPair5_B, (int)Inp_ConfirmPair6_B };
+                      (int)Inp_ConfirmPair4_B, (int)Inp_ConfirmPair5_B, (int)Inp_ConfirmPair6_B
+                    };
          bool en[6]= { Inp_ConfirmPair1_Enable, Inp_ConfirmPair2_Enable, Inp_ConfirmPair3_Enable,
-                       Inp_ConfirmPair4_Enable, Inp_ConfirmPair5_Enable, Inp_ConfirmPair6_Enable };
+                       Inp_ConfirmPair4_Enable, Inp_ConfirmPair5_Enable, Inp_ConfirmPair6_Enable
+                     };
          for(int i=0;i<6;i++)
            {
-            if(!en[i]) continue;
-            if( (confA==a[i] && confB==b[i]) || (confA==b[i] && confB==a[i]) )
+            if(!en[i])
+               continue;
+            if((confA==a[i] && confB==b[i]) || (confA==b[i] && confB==a[i]))
               { pairIdx=(uchar)(i+1); break; }
            }
         }
      }
   }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 uchar ComputeBOSType(bool is_buy, ENUM_TIMEFRAMES tf, datetime t1)
   {
-   bool bBefore=false, bAfter=false; double ref=0.0;
+   bool bBefore=false, bAfter=false;
+   double ref=0.0;
    bool ok = HTF_BOS_AroundFVG(tf, t1, is_buy,
                                Inp_HTF_BOS_K, Inp_HTF_BOS_LookbackBars, Inp_HTF_BOS_LookaheadBars,
                                bBefore, bAfter, ref);
-   if(!ok) return 0;
-   if(bBefore && bAfter) return 3;
-   if(bBefore) return 1;
-   if(bAfter)  return 2;
+   if(!ok)
+      return 0;
+   if(bBefore && bAfter)
+      return 3;
+   if(bBefore)
+      return 1;
+   if(bAfter)
+      return 2;
    return 0;
   }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void PrintMagicDecode(const ulong mg, const double profit=0.0, const bool haveProfit=false)
   {
-   if(!MagicIsOurs((long)mg)) return;
+   if(!MagicIsOurs((long)mg))
+      return;
    uchar f = MagicFlags(mg);
    uchar p = MagicPair(mg);
    uchar b = MagicBOSType(mg);
    string fl="";
    string names[7] = {"ENG","MFVG","WICK","BOS","SFP","RET","IB"};
-   for(int i=0;i<7;i++) if((f>>i)&1){ if(StringLen(fl)>0) fl+="+"; fl+=names[i]; }
+   for(int i=0;i<7;i++)
+      if((f>>i)&1)
+        {
+         if(StringLen(fl)>0)
+            fl+="+";
+         fl+=names[i];
+        }
    string bos = (b==3?"BOTH":(b==2?"AFTER":(b==1?"BEFORE":"NONE")));
    string pairS = (p==0?"NA":(string)p);
    if(haveProfit)
@@ -638,7 +691,7 @@ void TradeLog(const string phase,
    if(StringLen(detail)>700)
       detail = StringSubstr(detail,0,700);
 
-  PrintFormat("[ZERO_TRADE]|PH=%s|TIME=%s|SYM=%s|TF=%s|SIDE=%s|MODE=%s|TICKET=%I64u|LOTS=%.3f|ENTRY=%.*f|SL=%.*f|TP=%.*f|CONF=%s|FT:%c|ZTF=%s|ZTOP=%.*f|ZBOT=%.*f|ZTIME=%s|%s|DETAIL=%s",
+   PrintFormat("[ZERO_TRADE]|PH=%s|TIME=%s|SYM=%s|TF=%s|SIDE=%s|MODE=%s|TICKET=%I64u|LOTS=%.3f|ENTRY=%.*f|SL=%.*f|TP=%.*f|CONF=%s|FT:%c|ZTF=%s|ZTOP=%.*f|ZBOT=%.*f|ZTIME=%s|%s|DETAIL=%s",
                phase,
                TimeToString(TimeCurrent(), TIME_DATE|TIME_MINUTES|TIME_SECONDS),
                _Symbol,
@@ -669,7 +722,7 @@ void TradeLog(const string phase,
                        DigitsSym(), (tp>0.0 ? tp : 0.0),
                        s.confirm, ft));
 
-   // CSV/text logging removed
+// CSV/text logging removed
   }
 
 
@@ -697,9 +750,6 @@ bool LastLTF_Swing(bool is_buy, int k, double &lvl)
      }
    return false;
   }
-
-
-
 
 //==================== CHECK FOR MAX DAILY LOSS HIT ====================//
 bool DailyLossHit()
@@ -735,9 +785,6 @@ bool DailyLossHit()
    double limit = -(base * Inp_DailyLossMaxPct/100.0);
    return (pl <= limit);
   }
-
-
-
 
 /// === session filters
 
@@ -1148,7 +1195,7 @@ string ConfirmIndexToName(int k)
      }
    return "";
   }
- 
+
 
 //================= Zone Validation Aftor Touch /Retracements =================
 
@@ -1469,10 +1516,19 @@ double GetSpreadPrice() { return GetSpreadPoints() * _Point; }
 //    return Inp_MaxSpreadPrice;
 //   }
 
-double SpreadLimitPrice(){
-  if(Inp_UseATRforSpread){ double atr=ATR(PERIOD_H1,14); if(atr>0) return atr*Inp_MaxSpreadATRMult; }
-  return Inp_MaxSpreadPrice;
-}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+double SpreadLimitPrice()
+  {
+   if(Inp_UseATRforSpread)
+     {
+      double atr=ATR(PERIOD_H1,14);
+      if(atr>0)
+         return atr*Inp_MaxSpreadATRMult;
+     }
+   return Inp_MaxSpreadPrice;
+  }
 
 
 //+------------------------------------------------------------------+
@@ -1613,10 +1669,7 @@ bool StrToTF(string tok, ENUM_TIMEFRAMES &out)
       return true;
      }
    if(tok=="MN1")
-     {
-      out=PERIOD_MN1;
-      return true;
-     }
+     {out=PERIOD_MN1;return true;}
    return false;
   }
 
@@ -1780,12 +1833,18 @@ int SplitCSV(const string &s, const string &sep, string &out[])
 //      }
 //   }
 
-ENUM_TIMEFRAMES ChildTFForBOS(ENUM_TIMEFRAMES ltf){
-  ENUM_TIMEFRAMES c=(ltf==PERIOD_M5?Inp_BOS_Child_M5:(ltf==PERIOD_M15?Inp_BOS_Child_M15:(ltf==PERIOD_H1?PERIOD_M3:(ltf==PERIOD_H4?PERIOD_M5:PERIOD_M1))));
-  if(iBars(_Symbol,c)<=0) c=(c==PERIOD_M3?PERIOD_M1:c);
-  if(iBars(_Symbol,c)<=0) c=PERIOD_M1;
-  return c;
-}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+ENUM_TIMEFRAMES ChildTFForBOS(ENUM_TIMEFRAMES ltf)
+  {
+   ENUM_TIMEFRAMES c=(ltf==PERIOD_M5?Inp_BOS_Child_M5:(ltf==PERIOD_M15?Inp_BOS_Child_M15:(ltf==PERIOD_H1?PERIOD_M3:(ltf==PERIOD_H4?PERIOD_M5:PERIOD_M1))));
+   if(iBars(_Symbol,c)<=0)
+      c=(c==PERIOD_M3?PERIOD_M1:c);
+   if(iBars(_Symbol,c)<=0)
+      c=PERIOD_M1;
+   return c;
+  }
 
 
 //+------------------------------------------------------------------+
@@ -2051,7 +2110,7 @@ void DrawOrUpdate(const FVGZone &z)
    ObjectSetInteger(0, z.name, OBJPROP_COLOR, (color)(z.bullish?Inp_BullColor:Inp_BearColor));
    ObjectSetInteger(0, z.name, OBJPROP_BGCOLOR, fill);
    ObjectSetInteger(0, z.name, OBJPROP_STYLE, STYLE_SOLID);
-   ObjectSetInteger(0, z.name, OBJPROP_WIDTH, 1);
+  ObjectSetInteger(0, z.name, OBJPROP_WIDTH, 1);
 
    if(Inp_ShowMidline)
      {
@@ -2068,9 +2127,70 @@ void DrawOrUpdate(const FVGZone &z)
      }
    else
      {
-      if(ObjectFind(0, z.name50)!=-1)
-         ObjectDelete(0, z.name50);
+     if(ObjectFind(0, z.name50)!=-1)
+        ObjectDelete(0, z.name50);
      }
+
+// Draw per-zone info label (gap width & momentum) centered in the box
+  
+
+// Draw per-zone info label (gap width & momentum)
+ // Draw per-zone info label (gap width & momentum)
+if(Inp_ShowFVGInfo)
+{
+   string infoName = z.name + "_INFO";
+
+   // width & momentum
+   double w    = MathAbs(z.upper - z.lower);
+   double wPts = w/_Point;
+   double atr  = ATR(z.tf, Inp_ATR_Period);
+   double wATR = (atr>0.0 ? (w/atr) : 0.0);
+
+   double disp = 0.0;
+   bool gotDisp = HTF_DisplacementFactor(z.tf, z.t_left, disp);
+
+   string txt = StringFormat("W:%dpt | W/ATR:%.2f | Disp:%.2f",
+                             (int)MathRound(wPts), wATR, (gotDisp?disp:0.0));
+
+   // ---- keep label centered INSIDE the original box (no extend jitter)
+   datetime t_left  = z.t_left;
+   datetime t_right = z.t_right;
+
+   // Visible-window clamp so it never "vanishes" off-screen
+   int firstVis = (int)ChartGetInteger(0, CHART_FIRST_VISIBLE_BAR);
+   int visCount = (int)ChartGetInteger(0, CHART_VISIBLE_BARS);
+   int rightIdx = MathMax(0, firstVis - (visCount - 1));
+   datetime rightVis = iTime(_Symbol, (ENUM_TIMEFRAMES)Period(), rightIdx);
+   if(rightVis>0 && t_right > rightVis) t_right = rightVis;
+
+   long tc = (long)t_left + ((long)t_right - (long)t_left)/2;
+   datetime tx = (datetime)tc;
+
+   // y at mid of zone (always inside while zone is valid)
+   double y = (z.lower + z.upper) * 0.5;
+
+   if(ObjectFind(0, infoName) < 0)
+      ObjectCreate(0, infoName, OBJ_TEXT, 0, tx, y);
+   else
+      ObjectMove(0, infoName, 0, tx, y);
+
+   // Make it sticky & on top of the rectangle
+   ObjectSetString (0, infoName, OBJPROP_TEXT, txt);
+   ObjectSetInteger(0, infoName, OBJPROP_COLOR, (long)Inp_Color_Foreground);
+   ObjectSetInteger(0, infoName, OBJPROP_FONTSIZE, Inp_FVGInfoFontSize);
+   ObjectSetInteger(0, infoName, OBJPROP_BACK, false);
+   ObjectSetInteger(0, infoName, OBJPROP_HIDDEN, false);
+   ObjectSetInteger(0, infoName, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, infoName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+   ObjectSetInteger(0, infoName, OBJPROP_ZORDER, 2000); // above zone fill
+}
+else
+{
+   string infoName = z.name + "_INFO";
+   if(ObjectFind(0, infoName) >= 0)
+      ObjectDelete(0, infoName);
+}
+ChartRedraw();
   }
 
 //+------------------------------------------------------------------+
@@ -2082,6 +2202,9 @@ void DeleteZoneGraphics(const FVGZone &z)
       ObjectDelete(0, z.name);
    if(ObjectFind(0, z.name50)!=-1)
       ObjectDelete(0, z.name50);
+   string infoName = z.name + "_INFO";
+   if(ObjectFind(0, infoName)!=-1)
+      ObjectDelete(0, infoName);
   }
 
 //+------------------------------------------------------------------+
@@ -2654,24 +2777,62 @@ bool LTF_ClosedInsideZoneAt(double top,double bot,int shift)
 //    return false;
 //   }
 
-bool LTF_BOSAt(bool is_buy,int s){
-  datetime t_open=iTime(_Symbol,TF_LTF(),s), t_close=iTime(_Symbol,TF_LTF(),s-1);
-  if(!t_open || !t_close) return false;
-  ENUM_TIMEFRAMES ctf=ChildTFForBOS(TF_LTF());
-  MqlRates cr[]; int cb=CopyRates(_Symbol,ctf,0,800,cr);
-  if(cb<=60){ ctf=PERIOD_M1; cb=CopyRates(_Symbol,ctf,0,800,cr); }
-  if(cb<=60){ MqlRates lr[]; int lb; if(!CopyRatesTF(TF_LTF(),s+40,lr,lb)||lb<s+5) return false;
-    ArraySetAsSeries(lr,true); double hi=-DBL_MAX,lo=DBL_MAX;
-    for(int i=s+1;i<=s+30 && i<lb;i++){ if(lr[i].high>hi) hi=lr[i].high; if(lr[i].low<lo) lo=lr[i].low; }
-    double cl=lr[s].close; return is_buy ? (cl>hi) : (cl<lo); }
-  ArraySetAsSeries(cr,true);
-  int iS=iBarShift(_Symbol,ctf,t_open,true), iE=iBarShift(_Symbol,ctf,t_close,true);
-  if(iS<0||iE<0||iS<iE) return false;
-  double pHi=-DBL_MAX,pLo=DBL_MAX;
-  for(int i=iS+1;i<=iS+30 && i<cb;i++){ if(cr[i].high>pHi) pHi=cr[i].high; if(cr[i].low<pLo) pLo=cr[i].low; }
-  for(int i=iE;i<=iS && i<cb;i++){ double cl=cr[i].close; if( is_buy && cl>pHi) return true; if(!is_buy && cl<pLo) return true; }
-  return false;
-}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool LTF_BOSAt(bool is_buy,int s)
+  {
+   datetime t_open=iTime(_Symbol,TF_LTF(),s), t_close=iTime(_Symbol,TF_LTF(),s-1);
+   if(!t_open || !t_close)
+      return false;
+   ENUM_TIMEFRAMES ctf=ChildTFForBOS(TF_LTF());
+   MqlRates cr[];
+   int cb=CopyRates(_Symbol,ctf,0,800,cr);
+   if(cb<=60)
+     {
+      ctf=PERIOD_M1;
+      cb=CopyRates(_Symbol,ctf,0,800,cr);
+     }
+   if(cb<=60)
+     {
+      MqlRates lr[];
+      int lb;
+      if(!CopyRatesTF(TF_LTF(),s+40,lr,lb)||lb<s+5)
+         return false;
+      ArraySetAsSeries(lr,true);
+      double hi=-DBL_MAX,lo=DBL_MAX;
+      for(int i=s+1;i<=s+30 && i<lb;i++)
+        {
+         if(lr[i].high>hi)
+            hi=lr[i].high;
+         if(lr[i].low<lo)
+            lo=lr[i].low;
+        }
+      double cl=lr[s].close;
+      return is_buy ? (cl>hi) : (cl<lo);
+     }
+   ArraySetAsSeries(cr,true);
+   int iS=iBarShift(_Symbol,ctf,t_open,true), iE=iBarShift(_Symbol,ctf,t_close,true);
+   if(iS<0||iE<0||iS<iE)
+      return false;
+   double pHi=-DBL_MAX,pLo=DBL_MAX;
+   for(int i=iS+1;i<=iS+30 && i<cb;i++)
+     {
+      if(cr[i].high>pHi)
+         pHi=cr[i].high;
+      if(cr[i].low<pLo)
+         pLo=cr[i].low;
+     }
+   for(int i=iE;i<=iS && i<cb;i++)
+     {
+      double cl=cr[i].close;
+      if(is_buy && cl>pHi)
+         return true;
+      if(!is_buy && cl<pLo)
+         return true;
+     }
+   return false;
+  }
 
 
 // ==== SFP (liquidity grab) on LTF bar s ====
@@ -2821,18 +2982,25 @@ bool LTF_ConfirmationAt2(const Candidate &C, int s, string &which)
    ArrayResize(flags,7);
    BuildAllConfsAt(C, s, flags);
 
-   // Post-touch gating: if g_ftShiftActive>=1, disallow patterns that would
-   // reference bars older than the first-touch bar. With series indexing,
-   // older bars are at larger shifts (s+N). Guard each flag accordingly.
+// Post-touch gating: if g_ftShiftActive>=1, disallow patterns that would
+// reference bars older than the first-touch bar. With series indexing,
+// older bars are at larger shifts (s+N). Guard each flag accordingly.
    if(g_ftShiftActive>=1)
      {
-      if(s+1 > g_ftShiftActive) flags[0]=false; // ENGULF needs s+1
-      if(s+2 > g_ftShiftActive) flags[1]=false; // MFVG needs s+2
-      if(s     > g_ftShiftActive) flags[2]=false; // WICK on s
-      if(s     > g_ftShiftActive) flags[3]=false; // BOS on s window
-      if(s+3 > g_ftShiftActive) flags[4]=false; // SFP needs s+3
-      if(s     > g_ftShiftActive) flags[5]=false; // RETEST on s
-      if(s+2 > g_ftShiftActive) flags[6]=false; // IB needs s+2
+      if(s+1 > g_ftShiftActive)
+         flags[0]=false; // ENGULF needs s+1
+      if(s+2 > g_ftShiftActive)
+         flags[1]=false; // MFVG needs s+2
+      if(s     > g_ftShiftActive)
+         flags[2]=false; // WICK on s
+      if(s     > g_ftShiftActive)
+         flags[3]=false; // BOS on s window
+      if(s+3 > g_ftShiftActive)
+         flags[4]=false; // SFP needs s+3
+      if(s     > g_ftShiftActive)
+         flags[5]=false; // RETEST on s
+      if(s+2 > g_ftShiftActive)
+         flags[6]=false; // IB needs s+2
      }
 
 // ---- Preferred: structured UI path ----
@@ -3617,7 +3785,7 @@ bool HTF_BOS_AroundFVG(ENUM_TIMEFRAMES tf, datetime t1_left, bool is_buy,
 //+------------------------------------------------------------------+
 int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
   {
-   // scan oldest->newest to capture the true first touch
+// scan oldest->newest to capture the true first touch
    for(int s=backN; s>=1; --s)
      {
       bool touched = Inp_FirstTouchStrict
@@ -3803,22 +3971,22 @@ void EvaluateTradeOpportunities()
             Candidate c;
             if(BuildCandidateFromZone(is_buy, tf, t1, top, bot, mid, c))
               {
-              bool include=true;
-              if(Inp_TradeOnlyVisibleZones)
-                {
-                 if(tf==PERIOD_H1 || tf==PERIOD_H4)
-                   {
-                    int ti = TFSlot(tf);
-                    int si = SideSlot(is_buy);
-                    include = SameZone(g_htf[ti][si], t1, top, bot);
-                   }
-                }
-              if(include)
-                {
-                 int k=ArraySize(pool);
-                 ArrayResize(pool,k+1);
-                 pool[k]=c;
-                }
+               bool include=true;
+               if(Inp_TradeOnlyVisibleZones)
+                 {
+                  if(tf==PERIOD_H1 || tf==PERIOD_H4)
+                    {
+                     int ti = TFSlot(tf);
+                     int si = SideSlot(is_buy);
+                     include = SameZone(g_htf[ti][si], t1, top, bot);
+                    }
+                 }
+               if(include)
+                 {
+                  int k=ArraySize(pool);
+                  ArrayResize(pool,k+1);
+                  pool[k]=c;
+                 }
               }
            }
         }
@@ -3910,7 +4078,8 @@ void EvaluateTradeOpportunities()
          // confirmation on this bar?
          string tag;
          // Enable post-touch gating so confirmations never use pre-touch bars
-         int prevGate = g_ftShiftActive; g_ftShiftActive = (seekAfterTouch ? ftShift : -1);
+         int prevGate = g_ftShiftActive;
+         g_ftShiftActive = (seekAfterTouch ? ftShift : -1);
          bool okConf = LTF_ConfirmationAt2(C, s, tag);
          g_ftShiftActive = prevGate;
          if(!okConf)
@@ -4298,13 +4467,18 @@ double LotSizer_One(const double entry, const double sl, bool &hitCapOut)
 
 // ======= EXECUTOR (final, corrected, with rich journaling) =======
 // --- helper: ensure we end up WITH an SL (and TP if requested) or close the trade ---
-bool EnsureSLTPOrClose(bool is_buy, double wantSL, double wantTP, int max_tries=18, int delay_ms=140)
+// Ticket-aware version: when pos_ticket>0, modify that exact position (hedging-safe)
+bool EnsureSLTPOrClose(bool is_buy, double wantSL, double wantTP,
+                       ulong pos_ticket=0,
+                       int max_tries=18, int delay_ms=140)
   {
 // repeatedly try to attach/adjust SL/TP; if impossible, close position
    for(int k=0; k<max_tries; ++k)
      {
       // (re)select the position
-      if(!PositionSelect(_Symbol))
+      bool selected = (pos_ticket>0 ? PositionSelectByTicket(pos_ticket)
+                       : PositionSelect(_Symbol));
+      if(!selected)
         {
          Sleep(delay_ms);
          continue;
@@ -4337,9 +4511,13 @@ bool EnsureSLTPOrClose(bool is_buy, double wantSL, double wantTP, int max_tries=
          return true;
 
       // attempt to modify
-      bool mod = Trade.PositionModify(_Symbol,
-                                      (sl_des>0.0 ? ToTick(sl_des) : 0.0),
-                                      (tp_des>0.0 ? ToTick(tp_des) : 0.0));
+      bool mod = (pos_ticket>0)
+                 ? Trade.PositionModify(pos_ticket,
+                                        (sl_des>0.0 ? ToTick(sl_des) : 0.0),
+                                        (tp_des>0.0 ? ToTick(tp_des) : 0.0))
+                 : Trade.PositionModify(_Symbol,
+                                        (sl_des>0.0 ? ToTick(sl_des) : 0.0),
+                                        (tp_des>0.0 ? ToTick(tp_des) : 0.0));
       if(!mod)
         {
          uint rc = Trade.ResultRetcode();
@@ -4372,11 +4550,12 @@ bool EnsureSLTPOrClose(bool is_buy, double wantSL, double wantTP, int max_tries=
      }
 
 // last check; if still no SL, emergency close
-   if(PositionSelect(_Symbol) && PositionGetDouble(POSITION_SL)>0.0)
+   if((pos_ticket>0 ? PositionSelectByTicket(pos_ticket) : PositionSelect(_Symbol))
+      && PositionGetDouble(POSITION_SL)>0.0)
       return true;
 
    Print("[ZERO_GUARD] Could not attach SL after retries — closing position to avoid naked exposure.");
-   bool closed = Trade.PositionClose(_Symbol);
+   bool closed = (pos_ticket>0) ? Trade.PositionClose(pos_ticket) : Trade.PositionClose(_Symbol);
    if(!closed)
      {
       PrintFormat("[ZERO_GUARD] PositionClose failed rc=%u (%s)",
@@ -4412,9 +4591,9 @@ void ExecuteTradeForSignal(int idx)
       return;
      }
 
-  ConfigureTrade();
+   ConfigureTrade();
 
-  Signal s = g_signals[idx];
+   Signal s = g_signals[idx];
 
 // ----- short comment -----
    string conf="";
@@ -4446,27 +4625,28 @@ void ExecuteTradeForSignal(int idx)
 
 // ----- conflict / duplicates -----
    CloseOppositePositionsIfNeeded(s.is_buy);
-  CancelOppositePendingsIfNeeded(s.is_buy);
-  if(HasSimilarActiveOrderOrPosition(s.is_buy, s.entry))
-    {
+   CancelOppositePendingsIfNeeded(s.is_buy);
+   if(HasSimilarActiveOrderOrPosition(s.is_buy, s.entry))
+     {
       Print("[ZERO] Duplicate trade prevented.");
       g_signals[idx].traded=true;
       return;
-    }
+     }
 
-  // --- encode compact magic (HTF BOS type, LTF confirms, pair id)
-  if(Inp_UsePackedMagic)
-    {
-     uchar bits=0, pairId=0; uchar bosT = ComputeBOSType(s.is_buy, s.htf, s.z_t1);
-     BuildConfirmBits(s.confirm, bits, pairId);
-     ulong magicPacked = MagicPack(bits, pairId, bosT);
-     // apply per-order magic (restore after placing)
-     Trade.SetExpertMagicNumber(magicPacked);
-    }
+// --- encode compact magic (HTF BOS type, LTF confirms, pair id)
+   if(Inp_UsePackedMagic)
+     {
+      uchar bits=0, pairId=0;
+      uchar bosT = ComputeBOSType(s.is_buy, s.htf, s.z_t1);
+      BuildConfirmBits(s.confirm, bits, pairId);
+      ulong magicPacked = MagicPack(bits, pairId, bosT);
+      // apply per-order magic (restore after placing)
+      Trade.SetExpertMagicNumber(magicPacked);
+     }
 
 // ----- refs -----
-  const double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
-  const double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+   const double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
+   const double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
    const double ref_now=(s.is_buy?ask:bid);
    const double entry_px=ND(s.entry);
    const double ref_px=(Inp_EntryMode==Entry_Market)?ref_now:entry_px;
@@ -4597,7 +4777,7 @@ void ExecuteTradeForSignal(int idx)
                continue;
             if(PositionGetString(POSITION_SYMBOL)!=_Symbol)
                continue;
-           if(!MagicIsOurs((long)PositionGetInteger(POSITION_MAGIC)))
+            if(!MagicIsOurs((long)PositionGetInteger(POSITION_MAGIC)))
                continue;
             ENUM_POSITION_TYPE ty=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
             if((s.is_buy && ty!=POSITION_TYPE_BUY) || (!s.is_buy && ty!=POSITION_TYPE_SELL))
@@ -4638,7 +4818,7 @@ void ExecuteTradeForSignal(int idx)
         {
          Print("[ZERO_GUARD] Market placed without stops — enforcing SL/TP immediately.");
         }
-      EnsureSLTPOrClose(s.is_buy, sl_des, tp_to_set);
+      EnsureSLTPOrClose(s.is_buy, sl_des, tp_to_set, pos_ticket);
 
       // journal OPEN
       PositionSelect(_Symbol); // ensure selected before reading
@@ -4757,20 +4937,20 @@ void ExecuteTradeForSignal(int idx)
                      (long)Inp_Magic, ticket, conf, tf, ft,
                      (s.is_buy?"B":"S"), s.z_bot, s.z_top);
 
-        // (CSV event removed)
+         // (CSV event removed)
         }
      }
 
-  g_signals[idx].traded=true;
-  g_signals[idx].ticket=ticket;
-  MarkZoneTraded(s.htf, s.is_buy, s.z_t1, s.z_top, s.z_bot);
+   g_signals[idx].traded=true;
+   g_signals[idx].ticket=ticket;
+   MarkZoneTraded(s.htf, s.is_buy, s.z_t1, s.z_top, s.z_bot);
 
-  PrintFormat("[ZERO] %s placed | lots=%.3f | mode=%s | comment='%s'",
+   PrintFormat("[ZERO] %s placed | lots=%.3f | mode=%s | comment='%s'",
                (s.is_buy? "BUY":"SELL"), lots, (Inp_EntryMode==Entry_Market? "MKT":"PEND"), ordComment);
 
-  // restore default magic for subsequent operations
-  if(Inp_UsePackedMagic)
-     Trade.SetExpertMagicNumber((ulong)Inp_Magic);
+// restore default magic for subsequent operations
+   if(Inp_UsePackedMagic)
+      Trade.SetExpertMagicNumber((ulong)Inp_Magic);
   }
 
 
@@ -4823,10 +5003,14 @@ void ManageOpenPositions_BE_Trail()
       if(!st.movedBE)
         {
          double curSLnow = PositionGetDouble(POSITION_SL);
-         if(curSLnow > 0.0 && st.initialSL <= 0.0)
+         // If we seeded initialSL earlier (no SL at place), adopt the first real SL
+         if(curSLnow > 0.0)
            {
-            st.initialSL = curSLnow;
-            g_pmStates[stIx] = st;
+            if(MathAbs(curSLnow - st.initialSL) > _Point*0.5)
+              {
+               st.initialSL = curSLnow;
+               g_pmStates[stIx] = st;
+              }
            }
         }
 
@@ -4839,7 +5023,7 @@ void ManageOpenPositions_BE_Trail()
       // ensure no TP in BE/trailing mode
       double curTPnow = PositionGetDouble(POSITION_TP);
       if(curTPnow > 0.0)
-         Trade.PositionModify(_Symbol, sl, 0.0);
+         Trade.PositionModify(pt, sl, 0.0);
 
       // BE at +1R
       if(!st.movedBE && profR >= Inp_BE_Trig_R)
@@ -4852,7 +5036,7 @@ void ManageOpenPositions_BE_Trail()
          bool improves = is_buy ? (newSL > sl) : (newSL < sl);
          if(improves)
            {
-            if(Trade.PositionModify(_Symbol, ToTick(newSL), 0.0))
+            if(Trade.PositionModify(pt, ToTick(newSL), 0.0))
               {
                st.movedBE = true;
                g_pmStates[stIx] = st;
@@ -4860,9 +5044,8 @@ void ManageOpenPositions_BE_Trail()
                  {
 
                   PrintFormat("[ZERO] Move to BE+spread on %I64u at %.5f (%.2fR)", pt, newSL, profR);
-                  OpsLog(StringFormat("BE|POS=%I64u|SL=%.5f|R=%.2f", pt, newSL, profR));
                  }
-              // (CSV event removed)
+               // (CSV event removed)
               }
            }
          else
@@ -4916,7 +5099,7 @@ void ManageOpenPositions_BE_Trail()
             double trySL = ToTick(wantSL);
             if((is_buy && trySL < last) || (!is_buy && trySL > last))
               {
-               if(!Trade.PositionModify(_Symbol, trySL, 0.0))
+               if(!Trade.PositionModify(pt, trySL, 0.0))
                  {
                   uint rc = Trade.ResultRetcode();
                   if(rc==TRADE_RETCODE_INVALID_STOPS || rc==TRADE_RETCODE_INVALID_PRICE)
@@ -4925,17 +5108,14 @@ void ManageOpenPositions_BE_Trail()
                         trySL -= 2*_Point;
                      else
                         trySL += 2*_Point;
-                     Trade.PositionModify(_Symbol, ToTick(trySL), 0.0);
+                     Trade.PositionModify(pt, ToTick(trySL), 0.0);
                     }
                  }
                else
                  {
                   if(Inp_LogToJournal && !Inp_LogOnlyTrades)
-                    {
                      PrintFormat("[ZERO] Trailing SL -> %.5f on %I64u (%.2fR)", trySL, pt, profR);
-                     OpsLog(StringFormat("TRAIL|POS=%I64u|SL=%.5f|R=%.2f", pt, trySL, profR));
-                    }
-                 // (CSV event removed)
+                  // (CSV event removed)
                  }
               }
            }
@@ -5044,7 +5224,42 @@ void EnsureSingleHTFBox(const string baseName,
    ObjectSetInteger(0, baseName, OBJPROP_COLOR, clr);
    ObjectSetInteger(0, baseName, OBJPROP_STYLE, STYLE_SOLID);
    ObjectSetInteger(0, baseName, OBJPROP_WIDTH, 1);
-   ObjectSetInteger(0, baseName, OBJPROP_BACK, true);
+  ObjectSetInteger(0, baseName, OBJPROP_BACK, true);
+
+// Info label for HTF overlay box (gap width & momentum) centered
+   if(Inp_ShowFVGInfo)
+     {
+      string infoName = baseName + "_INFO";
+      double w = MathAbs(top_in - bot_in);
+      double wPts = w/_Point;
+      double atr = ATR(tf, Inp_ATR_Period);
+      double wATR = (atr>0.0 ? (w/atr) : 0.0);
+      double disp = 0.0;
+      bool gotDisp = HTF_DisplacementFactor(tf, t1_in, disp);
+      string txt = StringFormat("W:%dpt | W/ATR:%.2f | Disp:%.2f",
+                                (int)MathRound(wPts), wATR, (gotDisp?disp:0.0));
+      double y    = (top_in + bot_in)*0.5;
+      long tc = (long)t1_in + ((long)now - (long)t1_in)/2;
+      datetime tx = (datetime)tc;
+      if(ObjectFind(0, infoName)<0)
+         ObjectCreate(0, infoName, OBJ_TEXT, 0, tx, y);
+      else
+         ObjectMove(0, infoName, 0, tx, y);
+      ObjectSetString(0, infoName, OBJPROP_TEXT, txt);
+     ObjectSetInteger(0, infoName, OBJPROP_COLOR, (long)Inp_Color_Foreground);
+     ObjectSetInteger(0, infoName, OBJPROP_FONTSIZE, Inp_FVGInfoFontSize);
+     ObjectSetInteger(0, infoName, OBJPROP_BACK, false);
+     ObjectSetInteger(0, infoName, OBJPROP_SELECTABLE, false);
+     ObjectSetInteger(0, infoName, OBJPROP_ZORDER, 1200);
+     ObjectSetInteger(0, infoName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+    }
+  else
+    {
+     string infoName = baseName + "_INFO";
+     if(ObjectFind(0, infoName)>=0)
+        ObjectDelete(0, infoName);
+    }
+  ChartRedraw();
 
 // 4) Midline (optional)
    if(Inp_DrawHTF_Midline)
@@ -5063,25 +5278,34 @@ void EnsureSingleHTFBox(const string baseName,
 // 5) Remember as the current non-retired zone
    RememberZone(tf, is_buy, t1_in, top_in, bot_in, false);
 
-// 6) Remove any other HTF_* rectangles of the same TF/side (enforce single)
-   const int total = ObjectsTotal(0, -1, -1);
-   for(int i=total-1; i>=0; --i)
-     {
-      string nm = ObjectName(0,i);
-      if(StringFind(nm, "HTF_")!=0)
-         continue;
-      if(nm==baseName || nm==lineName)
+  // 6) Remove any other HTF_* rectangles of the same TF/side (enforce single)
+  const int total = ObjectsTotal(0, -1, -1);
+  for(int i=total-1; i>=0; --i)
+    {
+     string nm = ObjectName(0,i);
+     if(StringFind(nm, "HTF_")!=0)
+        continue;
+     if(nm==baseName || nm==lineName)
          continue;
 
-      const bool matchTF   = ((StringFind(nm,"HTF_H1_")>=0 && tf==PERIOD_H1) ||
+     // Keep info labels (text) intact
+     if(StringFind(nm, "_INFO")>=0)
+        continue;
+
+     // Only remove other rectangles, not lines/text
+     long otype = ObjectGetInteger(0, nm, OBJPROP_TYPE);
+     if(otype != OBJ_RECTANGLE)
+        continue;
+
+     const bool matchTF   = ((StringFind(nm,"HTF_H1_")>=0 && tf==PERIOD_H1) ||
                               (StringFind(nm,"HTF_H4_")>=0 && tf==PERIOD_H4) ||
                               (StringFind(nm,"HTF_M15_")>=0 && tf==PERIOD_M15));
-      const bool matchSide = (is_buy && StringFind(nm,"_BUY_") >=0) ||
+     const bool matchSide = (is_buy && StringFind(nm,"_BUY_") >=0) ||
                              (!is_buy && StringFind(nm,"_SELL_")>=0);
 
-      if(matchTF && matchSide)
-         ObjectDelete(0,nm);
-     }
+     if(matchTF && matchSide)
+        ObjectDelete(0,nm);
+    }
   }
 
 //+------------------------------------------------------------------+
@@ -5104,7 +5328,15 @@ void DrawHTFFVG_Extended(bool is_buy)
             continue;
          datetime t_obj = (datetime)ObjectGetInteger(0, name, OBJPROP_TIME, 0);
          if((now - t_obj) > Inp_CleanFVG_AfterHours*3600)
+           {
             ObjectDelete(0,name);
+            string lineName = name+"_LINE";
+            string infoName = name+"_INFO";
+            if(ObjectFind(0,lineName)>=0)
+               ObjectDelete(0,lineName);
+            if(ObjectFind(0,infoName)>=0)
+               ObjectDelete(0,infoName);
+           }
         }
      }
 
@@ -5190,8 +5422,11 @@ void CleanupMitigatedFVGs()
          datetime t1 = (datetime)ObjectGetInteger(0, name, OBJPROP_TIME, 0);
          RememberZone(tf, is_buy, t1, top, bot, true);
          string lineName = name + "_LINE";
+         string infoName = name + "_INFO";
          ObjectDelete(0, name);
          ObjectDelete(0, lineName);
+         if(ObjectFind(0, infoName)>=0)
+            ObjectDelete(0, infoName);
         }
      }
   }
@@ -5227,30 +5462,34 @@ void CheckMitigations()
   {
    double bid=SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double ask=SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   for(int i=0;i<g_zone_count;i++)
-     {
+  for(int i=0;i<g_zone_count;i++)
+    {
       if(!g_zones[i].active)
          continue;
       if(MitigatedNow(g_zones[i],bid,ask))
         {
-         g_zones[i].active=false;
-         if(Inp_AutoRemoveOnMit)
-           {
-            DeleteZoneGraphics(g_zones[i]);
-           }
-         else
-           {
-            if(ObjectFind(0, g_zones[i].name)!=-1)
-              {
-               uint fill = ColorWithAlpha(g_zones[i].bullish?Inp_BullColor:Inp_BearColor, Inp_FillAlpha/3);
-               ObjectSetInteger(0, g_zones[i].name, OBJPROP_BGCOLOR, fill);
-               ObjectSetInteger(0, g_zones[i].name, OBJPROP_COLOR, clrSilver);
-              }
-            if(ObjectFind(0, g_zones[i].name50)!=-1)
-               ObjectSetInteger(0, g_zones[i].name50, OBJPROP_COLOR, clrSilver);
-           }
+          g_zones[i].active=false;
+          if(Inp_AutoRemoveOnMit)
+            {
+              DeleteZoneGraphics(g_zones[i]);
+            }
+          else
+            {
+              if(ObjectFind(0, g_zones[i].name)!=-1)
+                {
+                  uint fill = ColorWithAlpha(g_zones[i].bullish?Inp_BullColor:Inp_BearColor, Inp_FillAlpha/3);
+                  ObjectSetInteger(0, g_zones[i].name, OBJPROP_BGCOLOR, fill);
+                  ObjectSetInteger(0, g_zones[i].name, OBJPROP_COLOR, clrSilver);
+                }
+              if(ObjectFind(0, g_zones[i].name50)!=-1)
+                 ObjectSetInteger(0, g_zones[i].name50, OBJPROP_COLOR, clrSilver);
+              // Zone became invalid: remove the info label even if we keep the box
+              string infoName = g_zones[i].name + "_INFO";
+              if(ObjectFind(0, infoName)>=0)
+                 ObjectDelete(0, infoName);
+            }
         }
-     }
+    }
   }
 
 //==================== INIT/DEINIT/EVENTS ====================//
@@ -5319,52 +5558,58 @@ double ToTick(double price)
 //       tp = ToTick(tp);
 //   }
 
-void FixStopsToLevels(double ref,bool buy,double &sl,double &tp){
-  int stl=(int)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL); double lim=stl*_Point; if(lim<=0) return;
-  if(buy){ if(sl>0 && ref-sl<lim) sl=ref-lim; if(tp>0 && tp-ref<lim) tp=ref+lim; }
-  else   { if(sl>0 && sl-ref<lim) sl=ref+lim; if(tp>0 && ref-tp<lim) tp=ref-lim; }
-}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void FixStopsToLevels(double ref,bool buy,double &sl,double &tp)
+  {
+   int stl=(int)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL);
+   double lim=stl*_Point;
+   if(lim<=0)
+      return;
+   if(buy)
+     {
+      if(sl>0 && ref-sl<lim)
+         sl=ref-lim;
+      if(tp>0 && tp-ref<lim)
+         tp=ref+lim;
+     }
+   else
+     {
+      if(sl>0 && sl-ref<lim)
+         sl=ref+lim;
+      if(tp>0 && ref-tp<lim)
+         tp=ref-lim;
+     }
+  }
 
 
-// Extra guard for live position modify: respect freeze level vs current price
-// void BumpForFreezeLevel(bool is_buy, double &sl, double &tp)
-//   {
-//    const int    freezePts = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL);
-//    const double freeze    = freezePts * _Point;
-//    if(freeze<=0)
-//       return;
 
-//    const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-//    const double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-
-//    if(is_buy)
-//      {
-//       // SL must be below bid by at least freeze; TP above ask by at least freeze
-//       if((bid - sl) < freeze)
-//          sl = bid - (freeze + 2*_Point);
-//       if(tp > 0.0 && (tp - ask) < freeze)
-//          tp = ask + (freeze + 2*_Point);
-//      }
-//    else
-//      {
-//       // SL must be above ask; TP below bid
-//       if((sl - ask) < freeze)
-//          sl = ask + (freeze + 2*_Point);
-//       if(tp > 0.0 && (bid - tp) < freeze)
-//          tp = bid - (freeze + 2*_Point);
-//      }
-
-//    sl = ToTick(sl);
-//    if(tp > 0.0)
-//       tp = ToTick(tp);
-//   }
-
-void BumpForFreezeLevel(bool buy,double &sl,double &tp){
-  int fr=(int)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_FREEZE_LEVEL); double lim=fr*_Point; if(lim<=0) return;
-  double px=SymbolInfoDouble(_Symbol, buy?SYMBOL_BID:SYMBOL_ASK);
-  if(buy){ if(sl>0 && px-sl<lim) sl=px-lim; if(tp>0 && tp-px<lim) tp=px+lim; }
-  else   { if(sl>0 && sl-px<lim) sl=px+lim; if(tp>0 && px-tp<lim) tp=px-lim; }
-}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void BumpForFreezeLevel(bool buy,double &sl,double &tp)
+  {
+   int fr=(int)SymbolInfoInteger(_Symbol,SYMBOL_TRADE_FREEZE_LEVEL);
+   double lim=fr*_Point;
+   if(lim<=0)
+      return;
+   double px=SymbolInfoDouble(_Symbol, buy?SYMBOL_BID:SYMBOL_ASK);
+   if(buy)
+     {
+      if(sl>0 && px-sl<lim)
+         sl=px-lim;
+      if(tp>0 && tp-px<lim)
+         tp=px+lim;
+     }
+   else
+     {
+      if(sl>0 && sl-px<lim)
+         sl=px+lim;
+      if(tp>0 && px-tp<lim)
+         tp=px-lim;
+     }
+  }
 
 
 //===============LOG TRADES & JOURNAL TO CSV ================//
@@ -5534,39 +5779,39 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    ulong  mg    = (ulong)HistoryDealGetInteger(deal, DEAL_MAGIC);
 
 // If this is an ENTRY deal, move the note from ORDER → POSITION
-  if(et==DEAL_ENTRY_IN)
-    {
+   if(et==DEAL_ENTRY_IN)
+     {
       if(GlobalVariableCheck(gvOrdKey(ordId)))
         {
          string note = GlobalVariableGet(gvOrdKey(ordId));
          TagPosition(posId, note);             // store under the position id
          GlobalVariableDel(gvOrdKey(ordId));   // cleanup the order stash
         }
-     // ops log entry
-     OpsLog(StringFormat("DEAL|ENTRY|SYM=%s|SIDE=%s|PRICE=%.*f|SL=%.*f|TP=%.*f|POS=%I64u|ORDER=%I64u",
-                         sym, (side==DEAL_TYPE_BUY?"BUY":"SELL"),
-                         _Digits, price, _Digits, sl, _Digits, tp, posId, ordId));
-    }
+      // ops log entry
+      OpsLog(StringFormat("DEAL|ENTRY|SYM=%s|SIDE=%s|PRICE=%.*f|SL=%.*f|TP=%.*f|POS=%I64u|ORDER=%I64u",
+                          sym, (side==DEAL_TYPE_BUY?"BUY":"SELL"),
+                          _Digits, price, _Digits, sl, _Digits, tp, posId, ordId));
+     }
 
 // Retrieve the note stored for this position (same for entry & exit)
    string tag = GetTag(posId);
 
-   // (Removed CSV logging)
+// (Removed CSV logging)
 
 // When the position is closed, drop the GV
-  if(et==DEAL_ENTRY_OUT)
-     GlobalVariableDel(gvPosKey(posId));
+   if(et==DEAL_ENTRY_OUT)
+      GlobalVariableDel(gvPosKey(posId));
 
 // On exit: we no longer write ledger or CSV; keep only GV cleanup above
-  if(et==DEAL_ENTRY_OUT)
-    {
-     // decode with realized profit
-     PrintMagicDecode(mg, pft, true);
-     // ops log close with P/L and reason
-     OpsLog(StringFormat("DEAL|CLOSE|SYM=%s|SIDE=%s|PRICE=%.*f|SL=%.*f|TP=%.*f|POS=%I64u|PROFIT=%.2f|RSN=%d",
-                         sym, (side==DEAL_TYPE_BUY?"BUY":"SELL"),
-                         _Digits, price, _Digits, sl, _Digits, tp, posId, pft, rsn));
-    }
+   if(et==DEAL_ENTRY_OUT)
+     {
+      // decode with realized profit
+      PrintMagicDecode(mg, pft, true);
+      // ops log close with P/L and reason
+      OpsLog(StringFormat("DEAL|CLOSE|SYM=%s|SIDE=%s|PRICE=%.*f|SL=%.*f|TP=%.*f|POS=%I64u|PROFIT=%.2f|RSN=%d",
+                          sym, (side==DEAL_TYPE_BUY?"BUY":"SELL"),
+                          _Digits, price, _Digits, sl, _Digits, tp, posId, pft, rsn));
+     }
    else
      {
       // entry: decode basic fields
@@ -5624,11 +5869,11 @@ int OnInit()
    ArrayResize(g_zones, 0);
    g_zone_count=0;
 
-   // (Help panel removed)
+// (Help panel removed)
    if(Inp_ScanOnTimerSec>0)
       EventSetTimer(Inp_ScanOnTimerSec);
 
-   // CSV/text auto-open removed
+// CSV/text auto-open removed
    return(INIT_SUCCEEDED);
   }
 
@@ -5638,7 +5883,7 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
-   }
+  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -5646,8 +5891,8 @@ void OnDeinit(const int reason)
 void OnTick()
   {
    CheckMitigations();
-   if(Inp_ExtendToRight)
-      RefreshGraphics();
+   // Always refresh to keep info labels present and centered
+   RefreshGraphics();
 
 // Weekend flattening (close/cancel) if needed
    if(ShouldFlattenForWeekend())
@@ -5669,7 +5914,7 @@ void OnTick()
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id,const long &l,const double &d,const string &s)
   {
-   }
+  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -5683,6 +5928,8 @@ void OnTimer()
          ScanTF(g_tfs[i]);
      }
    CleanupMitigatedFVGs();
+   // Ensure all active zones and their info labels are refreshed even without ticks
+   RefreshGraphics();
   }
 //+------------------------------------------------------------------+
 
