@@ -11,7 +11,7 @@
 #include <Trade/Trade.mqh>
 
 // ======================================================================
-// 1) CHART STYLE & HELPER WIDGET  — purely visual (no trading impact)
+// 1) CHART STYLE & HELPER WIDGET  � purely visual (no trading impact)
 // ======================================================================
 color Inp_Color_Background  = clrBlack;
 color Inp_Color_Foreground  = clrWhite;
@@ -24,7 +24,7 @@ color Inp_Color_BidLine     = clrRed;
 color Inp_Color_AskLine     = clrAqua;
 
 // ======================================================================
-// 2) HTF FVG SCANNER & ZONE DISCOVERY  — controls what zones exist
+// 2) HTF FVG SCANNER & ZONE DISCOVERY  � controls what zones exist
 // ======================================================================
 string Inp_TFs             = "H1,H4";      // default scan set (kept for reference)
 const int    Inp_LookbackBars    = 1000;
@@ -43,7 +43,7 @@ input double Inp_MaxSpreadPrice  = 0.0004;   // default (fallback abs cap)
 input int    Inp_ATR_Period      = 14;
 input double Inp_ATR_Mult        = 0.60;     // gap size vs ATR threshold (balanced)
 
-// Zone life-cycle (when to consider a zone “done”)
+// Zone life-cycle (when to consider a zone �done�)
 enum EMitigation { MitigateOnTouch=0, MitigateAt50=1, MitigateFull=2 };
 input EMitigation Inp_MitigationMode = MitigateAt50;
 input bool   Inp_AutoRemoveOnMit = true;
@@ -61,7 +61,7 @@ const int    Inp_FVGInfoFontSize = 14;
 
 
 // ======================================================================
-// 3) TRADE ENGINE — eligibility & scoring (signal generation)
+// 3) TRADE ENGINE � eligibility & scoring (signal generation)
 // ======================================================================
 enum EConfirm { Confirm_Strict=0, Confirm_Standard=1, Confirm_Aggressive=2 };
 input bool     Inp_EnableSignals   = true;
@@ -98,7 +98,7 @@ const   bool Inp_StartOnCloseInside    = true;
 
 
 // ======================================================================
-// 4) RISK & POSITION SIZING — how lots are computed and bounded
+// 4) RISK & POSITION SIZING � how lots are computed and bounded
 // ======================================================================
 enum ELotMode { Lot_Fixed=0, Lot_RiskPct=1, Lot_RiskMoney=2 };
 //+------------------------------------------------------------------+
@@ -127,35 +127,38 @@ input bool     Inp_SaveOpsToText   = true;   // mirror operations/events to a pl
 
 
 // ======================================================================
-// 5) SESSION FILTER — when trading is allowed (server time / UTC)
+// 5) SESSION FILTER � when trading is allowed (server time / UTC)
 // ======================================================================
-const bool Inp_UseSessionFilter          = false;
-const int  Inp_Session_TZ_Offset_Hours   = 3;
-const bool Inp_Session_Allow_London      = true;
-const int  Inp_London_Start_Hour         = 08;
-const int  Inp_London_End_Hour           = 13;
-const bool Inp_Session_Allow_NY_FirstHalf= true;
-const int  Inp_NY1_Start_Hour            = 15;
-const int  Inp_NY1_End_Hour              = 20;
+ 
 
+const bool Inp_UseSessionFilter            = true;
+const bool Inp_Session_Hours_Are_UTC       = true;   // if false, use offset below
+const int  Inp_Session_TZ_Offset_Hours     = 3;      // only used when Hours_Are_UTC = false
+
+// London
+const bool Inp_Session_Allow_London        = true;
+const int  Inp_London_Start_HHMM           = 800;    // 08:00
+const int  Inp_London_End_HHMM             = 1459;   // 14:30
+
+// NY (first half)
+const bool Inp_Session_Allow_NY_FirstHalf  = true;
+const int  Inp_NY1_Start_HHMM              = 1500;   // 15:00
+const int  Inp_NY1_End_HHMM                = 2100;   // 20:00
+
+// Asia (optional; may wrap midnight, e.g. 2200 -> 700)
+const bool Inp_Session_Allow_Asia          = true;
+const int  Inp_Asia_Start_HHMM             = 200;   //  2:00
+const int  Inp_Asia_End_HHMM               = 759;    // 07:00
+ 
 // Session visuals
 const color           Inp_SessionColor_Asia   = clrRed;
 const color           Inp_SessionColor_London = clrGreen;
 const color           Inp_SessionColor_NY1    = clrYellow;
 const int             Inp_SessionLineWidth    = 1;
 const ENUM_LINE_STYLE Inp_SessionLineStyle    = STYLE_DASH;
-
-// Hours interpretation
-const bool Inp_Session_Hours_Are_UTC = true;
-
-// Asia (optional)
-const bool Inp_Session_Allow_Asia    = true;
-const int  Inp_Asia_Start_Hour       = 2;
-const int  Inp_Asia_End_Hour         = 6;
-
-
+  
 // ======================================================================
-// 5b) NEWS BLOCKER — simple US high-impact schedule (local file or CSV)
+// 5b) NEWS BLOCKER � simple US high-impact schedule (local file or CSV)
 // ======================================================================
 const bool   Inp_EnableNewsBlock        = true;     // Master ON/OFF
 const int    Inp_News_Block_Minutes     = 60;       // Block window on both sides
@@ -165,7 +168,7 @@ input string Inp_News_Times_CSV         = "";       // Semicolon list: "YYYY-MM-
 input string Inp_News_FileName          = "US_HighImpact.txt"; // Files/US_HighImpact.txt one datetime per line
 
 // ======================================================================
-// 6) SIGNAL VISUALS & LABEL HYGIENE — how signals are drawn
+// 6) SIGNAL VISUALS & LABEL HYGIENE � how signals are drawn
 // ======================================================================
 const bool Inp_ShowLabels        = false;
 const bool Inp_ShowArrows        = false;
@@ -182,10 +185,14 @@ input bool        Inp_LogOnlyTrades= false;
 
 
 // ======================================================================
-// 7) ORDER ENTRY & RISK/REWARD TARGETS — how orders are sent
+// 7) ORDER ENTRY & RISK/REWARD TARGETS � how orders are sent
 // ======================================================================
 enum EEntryMode { Entry_Market=0, Entry_PendingAtEntry=1 };
 const EEntryMode  Inp_EntryMode  = Entry_Market;
+
+enum EMFVGMarketAdjust { MFVG_Adjust_Current=0, MFVG_Adjust_Start=1, MFVG_Adjust_Mid=2 };
+const EMFVGMarketAdjust Inp_MFVG_MarketAdjust = MFVG_Adjust_Start; // MFVG confirmations: control re-entry price
+
 
 const bool        Inp_TradeLive        = true;
 
@@ -218,7 +225,7 @@ input bool   Inp_CancelOppositePendings  = true;
 
 
 // ======================================================================
-// 8) EXIT MANAGEMENT — fixed TPs OR BE+trail (choose one mode)
+// 8) EXIT MANAGEMENT � fixed TPs OR BE+trail (choose one mode)
 // ======================================================================
 enum EExitMode { Exit_FixedTPs=0, Exit_BE_Trail=1 };
 const EExitMode Inp_ExitMode       = Exit_BE_Trail;  // trailing with delayed BE
@@ -230,7 +237,7 @@ const int    Inp_Trail_SwingK = 3;
 
 
 // ======================================================================
-// 9) CUSTOM CONFIRMATION ENGINE — K-of-N or Pairs
+// 9) CUSTOM CONFIRMATION ENGINE � K-of-N or Pairs
 // ======================================================================
 const bool Inp_UI_UseStructured = true; //Keep It True For Pair Or K of N to work
 
@@ -304,7 +311,7 @@ input ENUM_TIMEFRAMES Inp_BOS_Child_H4 = PERIOD_M5;   // Child TF for H4 FVG BOS
 
 
 // ======================================================================
-// 11) GLOBALS (runtime state & object names) — DO NOT EDIT IN INPUTS
+// 11) GLOBALS (runtime state & object names) � DO NOT EDIT IN INPUTS
 // ======================================================================
 
 //+------------------------------------------------------------------+
@@ -395,6 +402,7 @@ struct Signal
    string            info;
    bool              drawn;
    bool              traded;
+   bool              pendingOverride;
    ulong             ticket;
    datetime          z_t1;
    double            z_top, z_bot;
@@ -1410,7 +1418,7 @@ bool GetMicroFVGEdgesAt(bool is_buy, int s, double &edgeNear, double &edgeFar)
         {
          double lower = r[s+2].high, upper = r[s].low;
          edgeNear = upper;
-         edgeFar = lower;   // “start of gap” (first touched on retrace) = upper
+         edgeFar = lower;   // �start of gap� (first touched on retrace) = upper
          return true;
         }
      }
@@ -1420,7 +1428,7 @@ bool GetMicroFVGEdgesAt(bool is_buy, int s, double &edgeNear, double &edgeFar)
         {
          double lower = r[s].high, upper = r[s+2].low;
          edgeNear = lower;
-         edgeFar = upper;   // “start of gap” for sells = lower
+         edgeFar = upper;   // �start of gap� for sells = lower
          return true;
         }
      }
@@ -2555,7 +2563,7 @@ void DrawSignalLabel(const Signal &s, color clr)
          if(s.tp2>0.0)
             tpTxt = StringFormat("TP2 %.*f", DigitsSym(), s.tp2);
          else
-            tpTxt = "TP —";
+            tpTxt = "TP �";
 
    string header = StringFormat("%s %s  @%.*f | SL %.*f | %s | %s",
                                 (s.is_buy?"BUY":"SELL"), TFToStr(s.htf),
@@ -2771,7 +2779,7 @@ if((disp_check + 1e-9) < Inp_DisplacementMin) {
                         TFToStr(c.htf), (c.is_buy? "BUY":"SELL"),
                         DigitsSym(), c.top, DigitsSym(), c.bot, DigitsSym(), c.mid,
                         (validated? "Y":"N"), (validated? ftShift:-1),
-                        confirmLabel, flagsStr, mode, (StringLen(anchorNm)>0 ? anchorNm : "—"),
+                        confirmLabel, flagsStr, mode, (StringLen(anchorNm)>0 ? anchorNm : "�"),
                         DigitsSym(), entry, DigitsSym(), sl, R_pts,
                         DigitsSym(), tp1, DigitsSym(), tp2,
                         Sign2(c.biasH1), Sign2(c.biasH4), (c.inLocation? "OK":"N/A"),
@@ -3174,7 +3182,6 @@ int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
       if(tbar <= t_after_close)
          continue;                 // ignore bars that belong to/precede FVG formation
     
-      // if(Inp_UseSessionFilter && !IsTradingSessionAt(tbar)) continue; // NEW
 
       bool touched = Inp_FirstTouchStrict
                      ? LTF_EnteredZoneThisBar(C.is_buy, C.top, C.bot, s)
@@ -3234,7 +3241,7 @@ int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
 //       return;
 //      }
 
-// // ---- news guard (simple schedule ± window)
+// // ---- news guard (simple schedule � window)
 //    if(IsNewsBlockNow())
 //      {
 //       DebugPanel("No signals: high-impact news window.");
@@ -3413,7 +3420,7 @@ int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
 //       if(IsRetired(C.htf, C.is_buy, C.t1, C.top, C.bot))
 //          continue;
 
-//       // --- pick LTF per HTF (H1→M5, H4→M15), else fall back to chart TF
+//       // --- pick LTF per HTF (H1?M5, H4?M15), else fall back to chart TF
 //       ENUM_TIMEFRAMES evalTF =
 //          (C.htf==PERIOD_H1  ? PERIOD_M5  :
 //           (C.htf==PERIOD_H4  ? PERIOD_M15 :
@@ -3573,7 +3580,7 @@ int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
      }
  
 
-// ---- news guard (simple schedule ± window)
+// ---- news guard (simple schedule � window)
    if(IsNewsBlockNow())
      {
       DebugPanel("No signals: high-impact news window.");
@@ -3781,7 +3788,7 @@ int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
       if(IsRetired(C.htf, C.is_buy, C.t1, C.top, C.bot))
          continue;
 
-      // --- pick LTF per HTF (H1→M5, H4→M15), else fall back to chart TF
+      // --- pick LTF per HTF (H1?M5, H4?M15), else fall back to chart TF
       ENUM_TIMEFRAMES evalTF =
          (C.htf==PERIOD_H1  ? PERIOD_M5  :
           (C.htf==PERIOD_H4  ? PERIOD_M15 :
@@ -3921,13 +3928,6 @@ void ExecuteTradeForSignal(int idx)
    if(!Inp_TradeLive)
       return;
 
-       // hard gate at execution time
-      // ---- SESSION GATE #1: block if "now" is outside session ----
-   if(Inp_UseSessionFilter && !IsTradingSessionAt(TimeCurrent()))
-   {
-      Print("[ZERO] Trade blocked: outside allowed session (now).");
-      return;
-   }
 
    if(g_suppressAutoTrade)
      {
@@ -3953,6 +3953,12 @@ void ExecuteTradeForSignal(int idx)
    ConfigureTrade();
 
    Signal s = g_signals[idx];
+   if(Inp_UseSessionFilter && !IsTradingSessionAt(s.when))
+     {
+      if(Inp_LogToJournal && !Inp_LogOnlyTrades)
+         Print("[ZERO] Trade blocked: outside allowed session." );
+      return;
+     }
    bool usePending = (Inp_EntryMode==Entry_PendingAtEntry) || s.pendingOverride;
    string modeStr = usePending ? "PEND" : "MKT";
 
@@ -4039,12 +4045,12 @@ void ExecuteTradeForSignal(int idx)
    double lots=LotSizer_One(ref_px, sl, hitCap);
    if(lots<=0.0)
      {
-      Print("[ZERO] LotSizer returned 0 — aborting trade.");
+      Print("[ZERO] LotSizer returned 0 � aborting trade.");
       return;
      }
    if(Inp_BlockWhenCapped && hitCap)
      {
-      Print("[ZERO] Lots hit cap — blocked.");
+      Print("[ZERO] Lots hit cap � blocked.");
       return;
      }
 
@@ -4177,7 +4183,7 @@ void ExecuteTradeForSignal(int idx)
       // >>> HARD GUARANTEE: attach stops or close <<<
       if(placed_without_stops)
         {
-         Print("[ZERO_GUARD] Market placed without stops — enforcing SL/TP immediately.");
+         Print("[ZERO_GUARD] Market placed without stops � enforcing SL/TP immediately.");
         }
       EnsureSLTPOrClose(s.is_buy, sl_des, tp_to_set, pos_ticket);
 
@@ -4517,7 +4523,7 @@ void ManageOpenPositions_BE_Trail()
         {
          double newSL = is_buy ? (entry + spread) : (entry - spread);
          double tp_dummy=0.0;
-         FixStopsToLevels(last, is_buy, newSL, tp_dummy); // <— guard vs current price
+         FixStopsToLevels(last, is_buy, newSL, tp_dummy); // <� guard vs current price
          BumpForFreezeLevel(is_buy, newSL, tp_dummy);
 
          bool improves = is_buy ? (newSL > sl) : (newSL < sl);
@@ -4579,7 +4585,7 @@ void ManageOpenPositions_BE_Trail()
          if(improves)
            {
             double tp_dummy=0.0;
-            FixStopsToLevels(last, is_buy, wantSL, tp_dummy); // <— guard vs current price
+            FixStopsToLevels(last, is_buy, wantSL, tp_dummy); // <� guard vs current price
             BumpForFreezeLevel(is_buy, wantSL, tp_dummy);
 
             // small nudge if broker says invalid (common on tight symbols)
@@ -5290,7 +5296,7 @@ int PipPoints()
   {
    int d = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    if(d==5 || d==3)
-      return 10; // Forex 5-digit (or JPY 3-digit) → 10 points per pip
+      return 10; // Forex 5-digit (or JPY 3-digit) ? 10 points per pip
    return 1;                    // otherwise treat 1 point as a pip-like unit
   }
 
@@ -5317,10 +5323,10 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    double sl    = HistoryDealGetDouble(deal, DEAL_SL);
    double tp    = HistoryDealGetDouble(deal, DEAL_TP);
    double pft   = HistoryDealGetDouble(deal, DEAL_PROFIT);
-   int    rsn   = (int)HistoryDealGetInteger(deal, DEAL_REASON);           // SL/TP/EXPERT/…
+   int    rsn   = (int)HistoryDealGetInteger(deal, DEAL_REASON);           // SL/TP/EXPERT/�
    ulong  mg    = (ulong)HistoryDealGetInteger(deal, DEAL_MAGIC);
 
-// If this is an ENTRY deal, move the note from ORDER → POSITION
+// If this is an ENTRY deal, move the note from ORDER ? POSITION
    if(et==DEAL_ENTRY_IN)
      {
       if(GlobalVariableCheck(gvOrdKey(ordId)))
@@ -5478,7 +5484,7 @@ void TradeLog(const string phase,
                DigitsSym(), s.z_bot,
                TimeToString(s.z_t1, TIME_DATE|TIME_MINUTES),
                extra,    // short key=value notes
-               detail    // the advanced “s.info” line you already build (score, sweep, spread, BOS child, etc.)
+               detail    // the advanced �s.info� line you already build (score, sweep, spread, BOS child, etc.)
               );
 
 // mirror to operations text log (compact)
@@ -5602,97 +5608,178 @@ bool DailyLossHit()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
- bool IsTradingSessionNow()
-{
-   if(!Inp_UseSessionFilter) return true;
+//  bool IsTradingSessionNow()
+// {
+//    if(!Inp_UseSessionFilter) return true;
 
-   const datetime now = TimeCurrent();
+//    const datetime now = TimeCurrent();
 
-   // same conversion used for drawing
-   MqlDateTime dt; TimeToStruct(now, dt);
-   dt.hour=0; dt.min=0; dt.sec=0;
-   datetime serverMidnight = StructToTime(dt);
-   const int serverTZ  = (int)(TimeCurrent() - TimeGMT());
-   const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
+//    // same conversion used for drawing
+//    MqlDateTime dt; TimeToStruct(now, dt);
+//    dt.hour=0; dt.min=0; dt.sec=0;
+//    datetime serverMidnight = StructToTime(dt);
+//    const int serverTZ  = (int)(TimeCurrent() - TimeGMT());
+//    const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
 
-   bool ok=false;
+//    bool ok=false;
 
-   if(Inp_Session_Allow_London)
-   {
-      datetime a = serverMidnight + Inp_London_Start_Hour*3600 + (serverTZ - sessionTZ);
-      datetime b = serverMidnight + Inp_London_End_Hour  *3600 + (serverTZ - sessionTZ);
-      if(b <= a) b += 24*3600;
-      ok |= (now >= a && now < b);
-   }
+//    if(Inp_Session_Allow_London)
+//    {
+//       datetime a = serverMidnight + Inp_London_Start_Hour*3600 + (serverTZ - sessionTZ);
+//       datetime b = serverMidnight + Inp_London_End_Hour  *3600 + (serverTZ - sessionTZ);
+//       if(b <= a) b += 24*3600;
+//       ok |= (now >= a && now < b);
+//    }
 
-   if(Inp_Session_Allow_NY_FirstHalf)
-   {
-      datetime a = serverMidnight + Inp_NY1_Start_Hour*3600 + (serverTZ - sessionTZ);
-      datetime b = serverMidnight + Inp_NY1_End_Hour  *3600 + (serverTZ - sessionTZ);
-      if(b <= a) b += 24*3600;
-      ok |= (now >= a && now < b);
-   }
+//    if(Inp_Session_Allow_NY_FirstHalf)
+//    {
+//       datetime a = serverMidnight + Inp_NY1_Start_Hour*3600 + (serverTZ - sessionTZ);
+//       datetime b = serverMidnight + Inp_NY1_End_Hour  *3600 + (serverTZ - sessionTZ);
+//       if(b <= a) b += 24*3600;
+//       ok |= (now >= a && now < b);
+//    }
 
-   if(Inp_Session_Allow_Asia)
-   {
-      datetime a = serverMidnight + Inp_Asia_Start_Hour*3600 + (serverTZ - sessionTZ);
-      datetime b = serverMidnight + Inp_Asia_End_Hour  *3600 + (serverTZ - sessionTZ);
-      if(b <= a) b += 24*3600;
-      ok |= (now >= a && now < b);
-   }
+//    if(Inp_Session_Allow_Asia)
+//    {
+//       datetime a = serverMidnight + Inp_Asia_Start_Hour*3600 + (serverTZ - sessionTZ);
+//       datetime b = serverMidnight + Inp_Asia_End_Hour  *3600 + (serverTZ - sessionTZ);
+//       if(b <= a) b += 24*3600;
+//       ok |= (now >= a && now < b);
+//    }
 
-   return ok;
-}
+//    return ok;
+// }
 
  // Returns true iff the timestamp `when` is inside ANY enabled session window.
-// Handles UTC vs custom session TZ and windows that wrap past midnight (e.g., 22→02).
+// Handles UTC vs custom session TZ and windows that wrap past midnight (e.g., 22?02).
+// bool IsTradingSessionAt(datetime when)
+// {
+//    if(!Inp_UseSessionFilter) return true;
+//    if(when <= 0) when = TimeCurrent();
+
+//    // Anchor to the start of *that* day in server time
+//    MqlDateTime dt; TimeToStruct(when, dt);
+//    dt.hour = 0; dt.min = 0; dt.sec = 0;
+//    datetime serverMidnight = StructToTime(dt);
+
+//    // Convert session-hours (UTC or custom TZ) to server time
+//    const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // seconds
+//    const int sessionTZ = (Inp_Session_Hours_Are_UTC ? 0
+//                          : Inp_Session_TZ_Offset_Hours * 3600);
+
+//    // Build the enabled windows (start/end are HOURS in session TZ)
+//    int starts[3], ends[3], n = 0;
+//    if(Inp_Session_Allow_London)       { starts[n] = Inp_London_Start_Hour;   ends[n] = Inp_London_End_Hour;   ++n; }
+//    if(Inp_Session_Allow_NY_FirstHalf) { starts[n] = Inp_NY1_Start_Hour;      ends[n] = Inp_NY1_End_Hour;      ++n; }
+//    if(Inp_Session_Allow_Asia)         { starts[n] = Inp_Asia_Start_Hour;     ends[n] = Inp_Asia_End_Hour;     ++n; }
+//    if(n == 0) return true; // no sessions selected -> allow
+
+//    // Check `when` against each window
+//    for(int i=0; i<n; ++i)
+//    {
+//       const int sh = starts[i];
+//       const int eh = ends[i];
+//       if(sh == eh) continue; // zero-length window; skip
+
+//       // Convert window bounds to server time for the "current" day
+//       datetime a = serverMidnight + sh * 3600 + (serverTZ - sessionTZ);
+//       datetime b = serverMidnight + eh * 3600 + (serverTZ - sessionTZ);
+
+//       if(eh > sh)
+//       {
+//          // Simple same-day window [a,b)
+//          if(when >= a && when < b) return true;
+//       }
+//       else
+//       {
+//          // Wraps past midnight. There are two valid bindings:
+//          //  1) Yesterday 22:00 ? Today 02:00  (check [a-24h, b))
+//          //  2) Today     22:00 ? Tomorrow 02:00 (check [a, b+24h))
+//          datetime a_prev = a - 24*3600;
+//          datetime b_prev = b;
+//          if(when >= a_prev && when < b_prev) return true;
+
+//          datetime b_next = b + 24*3600;
+//          if(when >= a && when < b_next) return true;
+//       }
+//    }
+//    return false;
+// }
+
+
+// Convert HHMM to seconds since midnight; returns -1 on invalid.
+int HHMM_ToSeconds(int hhmm)
+{
+   int hh = hhmm / 100;
+   int mm = hhmm % 100;
+   if(hh < 0 || hh > 23 || mm < 0 || mm > 59) return -1;
+   return hh*3600 + mm*60;
+}
+
 bool IsTradingSessionAt(datetime when)
 {
    if(!Inp_UseSessionFilter) return true;
    if(when <= 0) when = TimeCurrent();
 
-   // Anchor to the start of *that* day in server time
+   // Server midnight of 'when'
    MqlDateTime dt; TimeToStruct(when, dt);
    dt.hour = 0; dt.min = 0; dt.sec = 0;
    datetime serverMidnight = StructToTime(dt);
 
-   // Convert session-hours (UTC or custom TZ) to server time
-   const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // seconds
-   const int sessionTZ = (Inp_Session_Hours_Are_UTC ? 0
-                         : Inp_Session_TZ_Offset_Hours * 3600);
+   // Timezone handling (seconds)
+   const int serverTZ  = (int)(TimeCurrent() - TimeGMT());           // server - UTC
+   const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
 
-   // Build the enabled windows (start/end are HOURS in session TZ)
-   int starts[3], ends[3], n = 0;
-   if(Inp_Session_Allow_London)       { starts[n] = Inp_London_Start_Hour;   ends[n] = Inp_London_End_Hour;   ++n; }
-   if(Inp_Session_Allow_NY_FirstHalf) { starts[n] = Inp_NY1_Start_Hour;      ends[n] = Inp_NY1_End_Hour;      ++n; }
-   if(Inp_Session_Allow_Asia)         { starts[n] = Inp_Asia_Start_Hour;     ends[n] = Inp_Asia_End_Hour;     ++n; }
-   if(n == 0) return true; // no sessions selected -> allow
+   // Build windows (HHMM → seconds)
+   int startsSec[3], endsSec[3], n = 0;
 
-   // Check `when` against each window
+   if(Inp_Session_Allow_London)
+   {
+      int s = HHMM_ToSeconds(Inp_London_Start_HHMM);
+      int e = HHMM_ToSeconds(Inp_London_End_HHMM);
+      if(s >= 0 && e >= 0) { startsSec[n]=s; endsSec[n]=e; ++n; }
+   }
+   if(Inp_Session_Allow_NY_FirstHalf)
+   {
+      int s = HHMM_ToSeconds(Inp_NY1_Start_HHMM);
+      int e = HHMM_ToSeconds(Inp_NY1_End_HHMM);
+      if(s >= 0 && e >= 0) { startsSec[n]=s; endsSec[n]=e; ++n; }
+   }
+   if(Inp_Session_Allow_Asia)
+   {
+      int s = HHMM_ToSeconds(Inp_Asia_Start_HHMM);
+      int e = HHMM_ToSeconds(Inp_Asia_End_HHMM);
+      if(s >= 0 && e >= 0) { startsSec[n]=s; endsSec[n]=e; ++n; }
+   }
+
+   // If no enabled/valid sessions → disallow trading
+   if(n == 0) return false;
+
+   // Check 'when' against each window
    for(int i=0; i<n; ++i)
    {
-      const int sh = starts[i];
-      const int eh = ends[i];
-      if(sh == eh) continue; // zero-length window; skip
+      int shSec = startsSec[i];
+      int ehSec = endsSec[i];
+      if(shSec == ehSec) continue;              // zero-length window
 
-      // Convert window bounds to server time for the "current" day
-      datetime a = serverMidnight + sh * 3600 + (serverTZ - sessionTZ);
-      datetime b = serverMidnight + eh * 3600 + (serverTZ - sessionTZ);
+      // Convert session bounds (in session TZ) → server time for that day
+      datetime a = serverMidnight + shSec + (serverTZ - sessionTZ);
+      datetime b = serverMidnight + ehSec + (serverTZ - sessionTZ);
 
-      if(eh > sh)
+      if(ehSec > shSec)
       {
-         // Simple same-day window [a,b)
+         // Same-day window [a, b)
          if(when >= a && when < b) return true;
       }
       else
       {
-         // Wraps past midnight. There are two valid bindings:
-         //  1) Yesterday 22:00 → Today 02:00  (check [a-24h, b))
-         //  2) Today     22:00 → Tomorrow 02:00 (check [a, b+24h))
+         // Overnight wrap (e.g., 22:00 → 07:00)
+         // Case 1: started yesterday → today
          datetime a_prev = a - 24*3600;
          datetime b_prev = b;
          if(when >= a_prev && when < b_prev) return true;
 
+         // Case 2: today → tomorrow
          datetime b_next = b + 24*3600;
          if(when >= a && when < b_next) return true;
       }
@@ -6187,75 +6274,170 @@ bool HasSimilarActiveOrderOrPosition(bool is_buy, double entry)
 //|                                                                  |
 //+------------------------------------------------------------------+
  
+// void DrawSessionLines_Today_Simple()
+// {
+//    // ---- server midnight (today) ----
+//    MqlDateTime dt; TimeToStruct(TimeCurrent(), dt);
+//    dt.hour=0; dt.min=0; dt.sec=0;
+//    datetime serverMidnight = StructToTime(dt);
+
+//    // ---- offsets (seconds) ----
+//    const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // server UTC offset (DST-safe)
+//    const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
+
+//    // --------- LONDON ----------
+//    if(Inp_Session_Allow_London)
+//    {
+//       datetime t1 = serverMidnight + Inp_London_Start_Hour*3600 + (serverTZ - sessionTZ); // FIX: apply (server - session)
+//       datetime t2 = serverMidnight + Inp_London_End_Hour  *3600 + (serverTZ - sessionTZ);
+//       if(t2 <= t1) t2 += 24*3600;
+
+//       string s1 = "SESSION_LONDON_START", s2 = "SESSION_LONDON_END";
+//       if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
+//       if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
+//       ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_London);
+//       ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_London);
+//       ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
+//       ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
+//       ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
+//       ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
+//       ObjectSetInteger(0,s1,OBJPROP_BACK,true);
+//       ObjectSetInteger(0,s2,OBJPROP_BACK,true);
+//    }
+
+//    // --------- NY FIRST HALF ----------
+//    if(Inp_Session_Allow_NY_FirstHalf)
+//    {
+//       datetime t1 = serverMidnight + Inp_NY1_Start_Hour*3600 + (serverTZ - sessionTZ);   // FIX
+//       datetime t2 = serverMidnight + Inp_NY1_End_Hour  *3600 + (serverTZ - sessionTZ);
+//       if(t2 <= t1) t2 += 24*3600;
+
+//       string s1 = "SESSION_NY1_START", s2 = "SESSION_NY1_END";
+//       if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
+//       if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
+//       ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_NY1);
+//       ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_NY1);
+//       ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
+//       ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
+//       ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
+//       ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
+//       ObjectSetInteger(0,s1,OBJPROP_BACK,true);
+//       ObjectSetInteger(0,s2,OBJPROP_BACK,true);
+//    }
+
+//    // --------- ASIA (optional) ----------
+//    if(Inp_Session_Allow_Asia)
+//    {
+//       datetime t1 = serverMidnight + Inp_Asia_Start_Hour*3600 + (serverTZ - sessionTZ);  // FIX
+//       datetime t2 = serverMidnight + Inp_Asia_End_Hour  *3600 + (serverTZ - sessionTZ);
+//       if(t2 <= t1) t2 += 24*3600;
+
+//       string s1 = "SESSION_ASIA_START", s2 = "SESSION_ASIA_END";
+//       if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
+//       if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
+//       ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_Asia);
+//       ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_Asia);
+//       ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
+//       ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
+//       ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
+//       ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
+//       ObjectSetInteger(0,s1,OBJPROP_BACK,true);
+//       ObjectSetInteger(0,s2,OBJPROP_BACK,true);
+//    }
+// }
+
+ void DrawOneSessionWindow(const string startName,
+                          const string endName,
+                          const int    startHHMM,
+                          const int    endHHMM,
+                          const color  clr,
+                          const datetime serverMidnight,
+                          const int    serverTZ,
+                          const int    sessionTZ)
+{
+   // HHMM → seconds
+   int sSec = HHMM_ToSeconds(startHHMM);
+   int eSec = HHMM_ToSeconds(endHHMM);
+
+   // Invalid or zero-length? remove if present and bail
+   if(sSec < 0 || eSec < 0 || sSec == eSec)
+   {
+      if(ObjectFind(0,startName) >= 0) ObjectDelete(0,startName);
+      if(ObjectFind(0,endName)   >= 0) ObjectDelete(0,endName);
+      return;
+   }
+
+   // Convert to *server* time for "today"
+   datetime a = serverMidnight + sSec + (serverTZ - sessionTZ);
+   datetime b = serverMidnight + eSec + (serverTZ - sessionTZ);
+
+   // Overnight wrap (e.g., 2200 -> 0700)
+   if(eSec <= sSec) b += 24*3600;
+
+   if(ObjectFind(0,startName) < 0) ObjectCreate(0, startName, OBJ_VLINE, 0, a, 0);
+   else                            ObjectMove(0,  startName, 0, a, 0);
+
+   if(ObjectFind(0,endName)   < 0) ObjectCreate(0, endName,   OBJ_VLINE, 0, b, 0);
+   else                            ObjectMove(0,  endName,   0, b, 0);
+
+   ObjectSetInteger(0, startName, OBJPROP_COLOR, clr);
+   ObjectSetInteger(0, endName,   OBJPROP_COLOR, clr);
+   ObjectSetInteger(0, startName, OBJPROP_STYLE, Inp_SessionLineStyle);
+   ObjectSetInteger(0, endName,   OBJPROP_STYLE, Inp_SessionLineStyle);
+   ObjectSetInteger(0, startName, OBJPROP_WIDTH, Inp_SessionLineWidth);
+   ObjectSetInteger(0, endName,   OBJPROP_WIDTH, Inp_SessionLineWidth);
+   ObjectSetInteger(0, startName, OBJPROP_BACK,  true);
+   ObjectSetInteger(0, endName,   OBJPROP_BACK,  true);
+}
+
 void DrawSessionLines_Today_Simple()
 {
-   // ---- server midnight (today) ----
+   // server midnight (today)
    MqlDateTime dt; TimeToStruct(TimeCurrent(), dt);
-   dt.hour=0; dt.min=0; dt.sec=0;
+   dt.hour = 0; dt.min = 0; dt.sec = 0;
    datetime serverMidnight = StructToTime(dt);
 
-   // ---- offsets (seconds) ----
-   const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // server UTC offset (DST-safe)
-   const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
+   // timezone offsets (seconds)
+   const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // server-UTC (DST safe)
+   const int sessionTZ = (Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours * 3600);
 
-   // --------- LONDON ----------
+   // LONDON
    if(Inp_Session_Allow_London)
    {
-      datetime t1 = serverMidnight + Inp_London_Start_Hour*3600 + (serverTZ - sessionTZ); // FIX: apply (server - session)
-      datetime t2 = serverMidnight + Inp_London_End_Hour  *3600 + (serverTZ - sessionTZ);
-      if(t2 <= t1) t2 += 24*3600;
-
-      string s1 = "SESSION_LONDON_START", s2 = "SESSION_LONDON_END";
-      if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
-      if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
-      ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_London);
-      ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_London);
-      ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
-      ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
-      ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
-      ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
-      ObjectSetInteger(0,s1,OBJPROP_BACK,true);
-      ObjectSetInteger(0,s2,OBJPROP_BACK,true);
+      DrawOneSessionWindow("SESSION_LONDON_START","SESSION_LONDON_END",
+                           Inp_London_Start_HHMM, Inp_London_End_HHMM, Inp_SessionColor_London,
+                           serverMidnight, serverTZ, sessionTZ);
+   }
+   else
+   {
+      if(ObjectFind(0,"SESSION_LONDON_START")>=0) ObjectDelete(0,"SESSION_LONDON_START");
+      if(ObjectFind(0,"SESSION_LONDON_END")  >=0) ObjectDelete(0,"SESSION_LONDON_END");
    }
 
-   // --------- NY FIRST HALF ----------
+   // NY FIRST HALF
    if(Inp_Session_Allow_NY_FirstHalf)
    {
-      datetime t1 = serverMidnight + Inp_NY1_Start_Hour*3600 + (serverTZ - sessionTZ);   // FIX
-      datetime t2 = serverMidnight + Inp_NY1_End_Hour  *3600 + (serverTZ - sessionTZ);
-      if(t2 <= t1) t2 += 24*3600;
-
-      string s1 = "SESSION_NY1_START", s2 = "SESSION_NY1_END";
-      if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
-      if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
-      ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_NY1);
-      ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_NY1);
-      ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
-      ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
-      ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
-      ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
-      ObjectSetInteger(0,s1,OBJPROP_BACK,true);
-      ObjectSetInteger(0,s2,OBJPROP_BACK,true);
+      DrawOneSessionWindow("SESSION_NY1_START","SESSION_NY1_END",
+                           Inp_NY1_Start_HHMM, Inp_NY1_End_HHMM, Inp_SessionColor_NY1,
+                           serverMidnight, serverTZ, sessionTZ);
+   }
+   else
+   {
+      if(ObjectFind(0,"SESSION_NY1_START")>=0) ObjectDelete(0,"SESSION_NY1_START");
+      if(ObjectFind(0,"SESSION_NY1_END")  >=0) ObjectDelete(0,"SESSION_NY1_END");
    }
 
-   // --------- ASIA (optional) ----------
+   // ASIA
    if(Inp_Session_Allow_Asia)
    {
-      datetime t1 = serverMidnight + Inp_Asia_Start_Hour*3600 + (serverTZ - sessionTZ);  // FIX
-      datetime t2 = serverMidnight + Inp_Asia_End_Hour  *3600 + (serverTZ - sessionTZ);
-      if(t2 <= t1) t2 += 24*3600;
-
-      string s1 = "SESSION_ASIA_START", s2 = "SESSION_ASIA_END";
-      if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
-      if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
-      ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_Asia);
-      ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_Asia);
-      ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
-      ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
-      ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
-      ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
-      ObjectSetInteger(0,s1,OBJPROP_BACK,true);
-      ObjectSetInteger(0,s2,OBJPROP_BACK,true);
+      DrawOneSessionWindow("SESSION_ASIA_START","SESSION_ASIA_END",
+                           Inp_Asia_Start_HHMM, Inp_Asia_End_HHMM, Inp_SessionColor_Asia,
+                           serverMidnight, serverTZ, sessionTZ);
+   }
+   else
+   {
+      if(ObjectFind(0,"SESSION_ASIA_START")>=0) ObjectDelete(0,"SESSION_ASIA_START");
+      if(ObjectFind(0,"SESSION_ASIA_END")  >=0) ObjectDelete(0,"SESSION_ASIA_END");
    }
 }
 
@@ -6504,7 +6686,7 @@ bool EnsureSLTPOrClose(bool is_buy, double wantSL, double wantTP,
       && PositionGetDouble(POSITION_SL)>0.0)
       return true;
 
-   Print("[ZERO_GUARD] Could not attach SL after retries — closing position to avoid naked exposure.");
+   Print("[ZERO_GUARD] Could not attach SL after retries � closing position to avoid naked exposure.");
    bool closed = (pos_ticket>0) ? Trade.PositionClose(pos_ticket) : Trade.PositionClose(_Symbol);
    if(!closed)
      {
