@@ -1298,48 +1298,6 @@ int SplitCSV(const string &s, const string &sep, string &out[])
   }
 
 
-// --- child TF for BOS (default + user overrides for M5/M15)
-// ENUM_TIMEFRAMES ChildTFForBOS(ENUM_TIMEFRAMES ltf)
-//   {
-//    if(ltf==PERIOD_M5)
-//       return Inp_BOS_Child_M5;
-//    if(ltf==PERIOD_M15)
-//      {
-//       if(Inp_HTFMode==HTF_M15_M1)
-//          return PERIOD_M1; // scalper mapping
-//       return Inp_BOS_Child_M15;
-//      }
-// // scalper mapping: when confirmations run on M1, check BOS on M1 as well
-//    if(ltf==PERIOD_M1)
-//       return PERIOD_M1;
-//    switch(ltf)
-//      {
-//       case PERIOD_H1:
-//          return PERIOD_M3;
-//       case PERIOD_H4:
-//          return PERIOD_M5;
-
-
-//       default:
-//          return PERIOD_M3;
-//      }
-//   }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-
-//===1H FVG/5M conf -> 3M BOS, 4H FVG/15M conf -> 5M BOS===///
-// ENUM_TIMEFRAMES ChildTFForBOS(ENUM_TIMEFRAMES ltf)
-//   {
-//    ENUM_TIMEFRAMES c=(ltf==PERIOD_M5?Inp_BOS_Child_M5:(ltf==PERIOD_M15?Inp_BOS_Child_M15:(ltf==PERIOD_H1?PERIOD_M3:(ltf==PERIOD_H4?PERIOD_M5:PERIOD_M1))));
-//    if(iBars(_Symbol,c)<=0)
-//       c=(c==PERIOD_M3?PERIOD_M1:c);
-//    if(iBars(_Symbol,c)<=0)
-//       c=PERIOD_M1;
-//    return c;
-//   }
-
 //=== 1H FVG/5M conf -> 1M BOS, 4H FVG/15M conf -> 3M BOS ===///
 ENUM_TIMEFRAMES ChildTFForBOS(ENUM_TIMEFRAMES ltf)
   {
@@ -1603,41 +1561,6 @@ bool IsMitigated_HTF(double top, double bot, bool is_buy, ENUM_TIMEFRAMES htf)
 
    return (ltfCross || htfCross || tickCross);
   }
-
-// bool IsMitigated_HTF(double top, double bot, bool is_buy, ENUM_TIMEFRAMES htf)
-// {
-//    // Dynamic level (center/33%/full etc.) driven by Inp_MitigationMode inside FvgThreshold()
-//    const double th = FvgThreshold(top, bot, is_buy);
-
-//    // Use the correct child LTF for mitigation checks (not the chart TF)
-//    ENUM_TIMEFRAMES ltf =
-//       (htf==PERIOD_H1  ? PERIOD_M5  :
-//       (htf==PERIOD_H4  ? PERIOD_M15 :
-//       (htf==PERIOD_M15 ? PERIOD_M1  : (ENUM_TIMEFRAMES)_Period)));
-
-//    // // --- wick/tick touch (fast) ---  Comment to have close-only checks not wick/tick
-//    // const double lLow  = iLow(_Symbol,  ltf, 1);
-//    // const double lHigh = iHigh(_Symbol, ltf, 1);
-//    // const bool wickTouch = (is_buy ? (lLow  <= th) : (lHigh >= th));
-
-//    const double lastB = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-//    const double lastA = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-//    const double lastL = SymbolInfoDouble(_Symbol, SYMBOL_LAST);
-//    const bool tickTouch = (is_buy ? (lastB <= th || lastA <= th || lastL <= th)
-//                                   : (lastB >= th || lastA >= th || lastL >= th));
-
-//    // --- close-based checks (LTF and HTF closes) ---
-//    const double cLTF = iClose(_Symbol, ltf, 1);
-//    const double cHTF = iClose(_Symbol, htf, 1);
-//    const bool ltfClose = (is_buy ? (cLTF <= th) : (cLTF >= th));
-//    const bool htfClose = (is_buy ? (cHTF <= th) : (cHTF >= th));
-
-//    // Combine (dynamic threshold already handled by FvgThreshold)
-//    // If you want *close-only*, return (ltfClose || htfClose).
-//    // return (wickTouch || tickTouch || ltfClose || htfClose);
-//    return (ltfClose || htfClose);
-
-// }
 
 
 
@@ -3142,29 +3065,6 @@ bool HTF_BOS_AroundFVG(ENUM_TIMEFRAMES tf, datetime t1_left, bool is_buy,
   }
 //===================== END OF HTF BOS /SWING CHECKS =====================//
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-// int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
-//   {
-// // scan oldest->newest to capture the true first touch
-//    for(int s=backN; s>=1; --s)
-//      {
-//       bool touched = Inp_FirstTouchStrict
-//                      ? LTF_EnteredZoneThisBar(C.is_buy, C.top, C.bot, s)
-//                      : LTF_TouchedZoneAt(C.top, C.bot, s);
-//       if(touched)
-//         {
-//          if(Inp_StartOnCloseInside)
-//            {
-//             if(!LTF_ClosedInsideZoneAt(C.top, C.bot, s))
-//                continue; // require a close inside the zone
-//            }
-//          return s;
-//         }
-//      }
-//    return -1;
-//   }
 int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
 {
    // --- only allow touches AFTER the HTF gap-closing bar has closed ---
@@ -3195,357 +3095,6 @@ int FindFirstTouchShiftInWindow(const Candidate &C, int backN)
    }
    return -1;
 }
-
-
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-//==Issue Is It Trade Even on Mittigated Zones (HTF)=================//
-
-// void EvaluateTradeOpportunities()
-//   {
-//    if(!Inp_EnableSignals)
-//      {
-//       DebugPanel("Signals /Oportunities disabled");
-//       return;
-//      }
-
-// // ---- global daily loss guard
-//    if(DailyLossHit())
-//      {
-//       DebugPanel("Trading paused: daily loss limit hit.");
-//       return;
-//      }
-
-// // ---- weekend new-trade guard
-//    if(BlockNewForWeekend())
-//      {
-//       DebugPanel("No signals: weekend protection active.");
-//       return;
-//      }
-
-// // ---- spread guard
-//    const double sp_price = GetSpreadPrice();
-//    const double lim      = SpreadLimitPrice();
-//    if(sp_price > lim)
-//      {
-//       DebugPanel(StringFormat("No signals: spread=%.5f > max=%.5f", sp_price, lim));
-//       return;
-//      }
-
-// // ---- session guard
-//    if(!IsTradingSessionNow())
-//      {
-//       DebugPanel("No signals: outside allowed session (London + first half NY).");
-//       return;
-//      }
-
-// // ---- news guard (simple schedule � window)
-//    if(IsNewsBlockNow())
-//      {
-//       DebugPanel("No signals: high-impact news window.");
-//       return;
-//      }
-
-// // ---- run once per CLOSED bar on the evaluation LTF (per Inp_HTFMode)
-//    ENUM_TIMEFRAMES gateTF = PERIOD_M5;
-//    switch(Inp_HTFMode)
-//      {
-//       case HTF_H1_M5:
-//          gateTF = PERIOD_M5;
-//          break;
-//       case HTF_H4_M15:
-//          gateTF = PERIOD_M15;
-//          break;
-//       case HTF_BOTH:
-//       case HTF_ANY:
-//          gateTF = PERIOD_M5;
-//          break; // frequent gate
-//       case HTF_M15_M1:
-//          gateTF = PERIOD_M1;
-//          break; // scalper gate
-//      }
-//    datetime ltfClosed = iTime(_Symbol, gateTF, 1);
-
-//    if(ltfClosed==0)
-//      {
-//       DebugPanel("Waiting for bars...");
-//       return;
-//      }
-//    if(ltfClosed==g_lastLTFClosed)
-//      {
-//       // DebugPanel("Waiting new LTF close...");
-//       return;
-//      }
-//    g_lastLTFClosed = ltfClosed;
-
-// // ---------- build candidate pool (HTFs from inputs, both sides) ----------
-//    Candidate pool[];
-//    ArrayResize(pool,0);
-
-// // ---- build TF list for TRADING from Inp_HTFMode (Inp_TFs deprecated) ----
-//    ENUM_TIMEFRAMES tradeTFs[];
-//    ArrayResize(tradeTFs,0);
-//    switch(Inp_HTFMode)
-//      {
-//       case HTF_H1_M5:
-//         { int k=ArraySize(tradeTFs); ArrayResize(tradeTFs,k+1); tradeTFs[k]=PERIOD_H1; }
-//       break;
-//       case HTF_H4_M15:
-//         { int k=ArraySize(tradeTFs); ArrayResize(tradeTFs,k+1); tradeTFs[k]=PERIOD_H4; }
-//       break;
-//       case HTF_BOTH:
-//       case HTF_ANY:
-//         { int k=ArraySize(tradeTFs); ArrayResize(tradeTFs,k+2); tradeTFs[k]=PERIOD_H1; tradeTFs[k+1]=PERIOD_H4; }
-//       break;
-//       case HTF_M15_M1:
-//         { int k=ArraySize(tradeTFs); ArrayResize(tradeTFs,k+1); tradeTFs[k]=PERIOD_M15; }
-//       break;
-//      }
-//    if(ArraySize(tradeTFs)==0)
-//      {
-//       int k=ArraySize(tradeTFs);
-//       ArrayResize(tradeTFs,k+1);
-//       tradeTFs[k]=PERIOD_H1;
-//      }
-
-//    bool sides[2]= {true,false}; // buy, sell
-
-//    for(int ti=0; ti<ArraySize(tradeTFs); ++ti)
-//      {
-//       ENUM_TIMEFRAMES tf = tradeTFs[ti];
-//       MqlRates r[];
-//       int bars = CopyRates(_Symbol, tf, 0, MathMax(Inp_LookbackBars,600), r);
-//       if(bars<5)
-//          continue;
-//       ArraySetAsSeries(r,true);
-
-//       for(int s=1; s<=bars-3; ++s)
-//         {
-//          double low_r  = r[s].low,  high_r = r[s].high;
-//          double low_l  = r[s+2].low, high_l = r[s+2].high;
-
-//          for(int si=0; si<2; ++si)
-//            {
-//             const bool is_buy = sides[si];
-//             bool ok=false;
-//             double lower=0, upper=0;
-
-//             if(is_buy)
-//               {
-//                if(low_r > high_l)
-//                  {
-//                   lower=high_l;
-//                   upper=low_r;
-//                   ok=true;
-//                  }
-//               }
-//             else
-//               {
-//                if(high_r < low_l)
-//                  {
-//                   lower=high_r;
-//                   upper=low_l;
-//                   ok=true;
-//                  }
-//               }
-//             if(!ok)
-//                continue;
-//             if(!PassesSizeFilter(tf, lower, upper))
-//                continue;
-
-//             const double top=upper, bot=lower, mid=0.5*(top+bot);
-//             const datetime t1 = r[s+2].time;
-
-//             // ignore zones we already retired
-//             if(IsRetired(tf,is_buy,t1,top,bot))
-//                continue;
-
-//             Candidate c;
-//             if(IsRetired(tf, is_buy, t1, top, bot) || IsMitigated_HTF(top, bot, is_buy, tf))
-//                {continue;}
-//             if(BuildCandidateFromZone(is_buy, tf, t1, top, bot, mid, c))
-//               {
-              
-//                bool include=true;
-//                if(Inp_TradeOnlyVisibleZones)
-//                  {
-//                   if(tf==PERIOD_H1 || tf==PERIOD_H4 || tf==PERIOD_M15)
-//                     {
-//                      int ti = TFSlot(tf);
-//                      int si = SideSlot(is_buy);
-//                      include = SameZone(g_htf[ti][si], t1, top, bot);
-//                     }
-//                  }
-//                if(include)
-//                  {
-//                   int k=ArraySize(pool);
-//                   ArrayResize(pool,k+1);
-//                   pool[k]=c;
-//                  }
-//               }
-//            }
-           
-//         }
-//      }
-
-// // ---------- sort pool by score (desc) ----------
-//    for(int i=0;i<ArraySize(pool);++i)
-//      {
-//       int best=i;
-//       for(int j=i+1;j<ArraySize(pool);++j)
-//          if(pool[j].score>pool[best].score)
-//             best=j;
-//       if(best!=i)
-//         {
-//          Candidate tmp=pool[i];
-//          pool[i]=pool[best];
-//          pool[best]=tmp;
-//         }
-//      }
-
-// // ---------- fire signals with hard cap and per-zone-per-bar dedupe ----------
-//    const int MAX_DRAW = MathMax(0, Inp_MaxSignalLabels);
-//    int total_drawn = 0;
-//    string seen_keys[];
-//    ArrayResize(seen_keys, 0);
-
-//    for(int i=0; i<ArraySize(pool) && total_drawn<MAX_DRAW; ++i)
-//      {
-//       // --- select candidate BEFORE using it
-//       Candidate C = pool[i];
-//       if(!C.valid)
-//          continue;
-//       if(IsRetired(C.htf, C.is_buy, C.t1, C.top, C.bot))
-//          continue;
-
-//       // --- pick LTF per HTF (H1?M5, H4?M15), else fall back to chart TF
-//       ENUM_TIMEFRAMES evalTF =
-//          (C.htf==PERIOD_H1  ? PERIOD_M5  :
-//           (C.htf==PERIOD_H4  ? PERIOD_M15 :
-//            (C.htf==PERIOD_M15 ? PERIOD_M1  : (ENUM_TIMEFRAMES)_Period)));
-
-//       g_evalOverride = true;
-//       g_evalTF       = evalTF;
-
-//       // use a per-candidate backfill window in that eval TF
-//       int barsEval   = iBars(_Symbol, evalTF);
-//       int backN_eval = MathMax(1, MathMin(Inp_BackfillBars, barsEval-2));
-
-//       // --- VALIDATION: require/allow tracking first touch before confirmations
-//       bool seekAfterTouch = (Inp_OnlyTradeOnFreshTouch || Inp_KeepSeekingAfterTouch);
-//       int  ftShift   = -1;
-//       bool validated = seekAfterTouch
-//                        ? IsZoneValidated(C.htf, C.is_buy, C.t1, C.top, C.bot, ftShift)
-//                        : true;
-
-//       if(seekAfterTouch && !validated)
-//         {
-//          // search the current backfill window for the most recent first-touch bar
-//          int found = FindFirstTouchShiftInWindow(C, backN_eval);
-//          if(found<0)
-//            {
-//             g_evalOverride=false;   // not touched yet
-//             continue;
-//            }
-//          MarkZoneValidated(C.htf, C.is_buy, C.t1, C.top, C.bot, found);
-//          ftShift   = found;
-//          validated = true;
-//         }
-
-//       // bars we will evaluate confirmations on:
-//       //  * If seekAfterTouch: only the first-touch bar and any newer bars (s <= ftShift)
-//       //  * Else (legacy): only bars that directly touch on s
-//       for(int s=1; s<=backN_eval && total_drawn<MAX_DRAW; ++s)
-//         {
-//          bool barAllowed;
-//          if(seekAfterTouch)
-//            {
-//             if(!validated)
-//                break;
-//             barAllowed = (s <= ftShift);
-//            }
-//          else
-//            {
-//             barAllowed = LTF_TouchedZoneAt(C.top, C.bot, s);
-//            }
-//          if(!barAllowed)
-//             continue;
-
-//          // confirmation on this bar?
-//          string tag;
-//          // Enable post-touch gating so confirmations never use pre-touch bars
-//          int prevGate = g_ftShiftActive;
-//          g_ftShiftActive = (seekAfterTouch ? ftShift : -1);
-//          bool okConf = LTF_ConfirmationAt2(C, s, tag);
-//          g_ftShiftActive = prevGate;
-//          if(!okConf)
-//             continue;
-
-//          // one-trade-per-zone guard (optional)
-//          if(!Inp_AllowMultiplePerZone && IsZoneAlreadyTraded(C.htf, C.is_buy, C.t1, C.top, C.bot))
-//             continue;
-
-//          // per-bar de-dupe (use the active eval TF via TF_LTF())
-//          datetime tbar = iTime(_Symbol, TF_LTF(), s);
-//          string key = StringFormat("%s|%c|%I64d|%.8f|%.8f|%I64d",
-//                                    TFToStr(C.htf), (C.is_buy?'B':'S'),
-//                                    (long)C.t1, C.top, C.bot, (long)tbar);
-//          bool seen=false;
-//          for(int kk=0; kk<ArraySize(seen_keys); ++kk)
-//            {
-//             if(seen_keys[kk]==key)
-//               {
-//                seen=true;
-//                break;
-//               }
-//            }
-//          if(seen)
-//             continue;
-
-//          // Backfill trade suppression (still draw the label)
-//          bool restoreSupp=false;
-//          if(Inp_DoNotTradeBackfill && s>1)
-//            {
-//             g_suppressAutoTrade=true;
-//             restoreSupp=true;
-//            }
-
-//          // draw & (optionally) trade
-//          //Final Check If Retired, Mitigated, or Traded or Traded Already
-//          if(IsRetired(C.htf, C.is_buy, C.t1, C.top, C.bot) || IsMitigated_HTF(C.top, C.bot, C.is_buy, C.htf) || IsZoneAlreadyTraded(C.htf, C.is_buy, C.t1, C.top, C.bot))
-//            {
-//             g_evalOverride=false;
-//             if(restoreSupp)
-//                g_suppressAutoTrade=false;
-//             continue;
-//            }
-
-//          SpawnSignalAt(C, tag, s);
-
-//          if(restoreSupp)
-//             g_suppressAutoTrade=false;
-
-//          int n_seen=ArraySize(seen_keys);
-//          ArrayResize(seen_keys, n_seen+1);
-//          seen_keys[n_seen]=key;
-//          total_drawn++;
-//         }
-
-//       // reset override for safety on each iteration
-//       g_evalOverride=false;
-//      }
-
-// // final safety
-//    g_evalOverride=false;
-
-//    string dbg = StringFormat("LTFclose:%s  Pool:%d  Plotted:%d (cap=%d)",
-//                              TimeToString(ltfClosed, TIME_MINUTES|TIME_SECONDS),
-//                              ArraySize(pool), total_drawn, MAX_DRAW);
-//    DebugPanel(dbg);
-//    TidySignalVisuals();
-//   }
 
 //NO TRADE IN THIS VERSION
  void EvaluateTradeOpportunities()
@@ -5339,6 +4888,46 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       OpsLog(StringFormat("DEAL|ENTRY|SYM=%s|SIDE=%s|PRICE=%.*f|SL=%.*f|TP=%.*f|POS=%I64u|ORDER=%I64u",
                           sym, (side==DEAL_TYPE_BUY?"BUY":"SELL"),
                           _Digits, price, _Digits, sl, _Digits, tp, posId, ordId));
+
+         // Ensure PMState exists and is seeded correctly for this new position.
+         if(posId>0 && PositionSelectByTicket(posId))
+            {
+             // only operate on our positions
+             if(MagicIsOurs((long)PositionGetInteger(POSITION_MAGIC)))
+                {
+                  // compute a safe initial SL (if broker rejected SL on order)
+                  double entry_px = PositionGetDouble(POSITION_PRICE_OPEN);
+                  double sl_pos   = PositionGetDouble(POSITION_SL);
+                  if(sl_pos<=0.0)
+                     {
+                      double atr = MathMax(ATR(TF_LTF(),14), 10*_Point);
+                      bool is_buy = ((ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+                      sl_pos = is_buy ? (entry_px - atr) : (entry_px + atr);
+                     }
+
+                  int idx = PM_Find(posId);
+                  if(idx>=0)
+                     {
+                      g_pmStates[idx].pos_ticket = posId;
+                      g_pmStates[idx].comment    = PositionGetString(POSITION_COMMENT);
+                      g_pmStates[idx].entry      = entry_px;
+                      g_pmStates[idx].initialSL  = sl_pos;
+                      g_pmStates[idx].movedBE    = false;
+                      g_pmStates[idx].trailArmed = false;
+                     }
+                  else
+                     {
+                      int n = ArraySize(g_pmStates);
+                      ArrayResize(g_pmStates, n+1);
+                      g_pmStates[n].pos_ticket = posId;
+                      g_pmStates[n].comment    = PositionGetString(POSITION_COMMENT);
+                      g_pmStates[n].entry      = entry_px;
+                      g_pmStates[n].initialSL  = sl_pos;
+                      g_pmStates[n].movedBE    = false;
+                      g_pmStates[n].trailArmed = false;
+                     }
+                }
+            }
      }
 
 // Retrieve the note stored for this position (same for entry & exit)
@@ -5604,107 +5193,6 @@ bool DailyLossHit()
   }
 
 /// === session filters
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-//  bool IsTradingSessionNow()
-// {
-//    if(!Inp_UseSessionFilter) return true;
-
-//    const datetime now = TimeCurrent();
-
-//    // same conversion used for drawing
-//    MqlDateTime dt; TimeToStruct(now, dt);
-//    dt.hour=0; dt.min=0; dt.sec=0;
-//    datetime serverMidnight = StructToTime(dt);
-//    const int serverTZ  = (int)(TimeCurrent() - TimeGMT());
-//    const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
-
-//    bool ok=false;
-
-//    if(Inp_Session_Allow_London)
-//    {
-//       datetime a = serverMidnight + Inp_London_Start_Hour*3600 + (serverTZ - sessionTZ);
-//       datetime b = serverMidnight + Inp_London_End_Hour  *3600 + (serverTZ - sessionTZ);
-//       if(b <= a) b += 24*3600;
-//       ok |= (now >= a && now < b);
-//    }
-
-//    if(Inp_Session_Allow_NY_FirstHalf)
-//    {
-//       datetime a = serverMidnight + Inp_NY1_Start_Hour*3600 + (serverTZ - sessionTZ);
-//       datetime b = serverMidnight + Inp_NY1_End_Hour  *3600 + (serverTZ - sessionTZ);
-//       if(b <= a) b += 24*3600;
-//       ok |= (now >= a && now < b);
-//    }
-
-//    if(Inp_Session_Allow_Asia)
-//    {
-//       datetime a = serverMidnight + Inp_Asia_Start_Hour*3600 + (serverTZ - sessionTZ);
-//       datetime b = serverMidnight + Inp_Asia_End_Hour  *3600 + (serverTZ - sessionTZ);
-//       if(b <= a) b += 24*3600;
-//       ok |= (now >= a && now < b);
-//    }
-
-//    return ok;
-// }
-
- // Returns true iff the timestamp `when` is inside ANY enabled session window.
-// Handles UTC vs custom session TZ and windows that wrap past midnight (e.g., 22?02).
-// bool IsTradingSessionAt(datetime when)
-// {
-//    if(!Inp_UseSessionFilter) return true;
-//    if(when <= 0) when = TimeCurrent();
-
-//    // Anchor to the start of *that* day in server time
-//    MqlDateTime dt; TimeToStruct(when, dt);
-//    dt.hour = 0; dt.min = 0; dt.sec = 0;
-//    datetime serverMidnight = StructToTime(dt);
-
-//    // Convert session-hours (UTC or custom TZ) to server time
-//    const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // seconds
-//    const int sessionTZ = (Inp_Session_Hours_Are_UTC ? 0
-//                          : Inp_Session_TZ_Offset_Hours * 3600);
-
-//    // Build the enabled windows (start/end are HOURS in session TZ)
-//    int starts[3], ends[3], n = 0;
-//    if(Inp_Session_Allow_London)       { starts[n] = Inp_London_Start_Hour;   ends[n] = Inp_London_End_Hour;   ++n; }
-//    if(Inp_Session_Allow_NY_FirstHalf) { starts[n] = Inp_NY1_Start_Hour;      ends[n] = Inp_NY1_End_Hour;      ++n; }
-//    if(Inp_Session_Allow_Asia)         { starts[n] = Inp_Asia_Start_Hour;     ends[n] = Inp_Asia_End_Hour;     ++n; }
-//    if(n == 0) return true; // no sessions selected -> allow
-
-//    // Check `when` against each window
-//    for(int i=0; i<n; ++i)
-//    {
-//       const int sh = starts[i];
-//       const int eh = ends[i];
-//       if(sh == eh) continue; // zero-length window; skip
-
-//       // Convert window bounds to server time for the "current" day
-//       datetime a = serverMidnight + sh * 3600 + (serverTZ - sessionTZ);
-//       datetime b = serverMidnight + eh * 3600 + (serverTZ - sessionTZ);
-
-//       if(eh > sh)
-//       {
-//          // Simple same-day window [a,b)
-//          if(when >= a && when < b) return true;
-//       }
-//       else
-//       {
-//          // Wraps past midnight. There are two valid bindings:
-//          //  1) Yesterday 22:00 ? Today 02:00  (check [a-24h, b))
-//          //  2) Today     22:00 ? Tomorrow 02:00 (check [a, b+24h))
-//          datetime a_prev = a - 24*3600;
-//          datetime b_prev = b;
-//          if(when >= a_prev && when < b_prev) return true;
-
-//          datetime b_next = b + 24*3600;
-//          if(when >= a && when < b_next) return true;
-//       }
-//    }
-//    return false;
-// }
 
 
 // Convert HHMM to seconds since midnight; returns -1 on invalid.
@@ -6273,78 +5761,6 @@ bool HasSimilarActiveOrderOrPosition(bool is_buy, double entry)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
- 
-// void DrawSessionLines_Today_Simple()
-// {
-//    // ---- server midnight (today) ----
-//    MqlDateTime dt; TimeToStruct(TimeCurrent(), dt);
-//    dt.hour=0; dt.min=0; dt.sec=0;
-//    datetime serverMidnight = StructToTime(dt);
-
-//    // ---- offsets (seconds) ----
-//    const int serverTZ  = (int)(TimeCurrent() - TimeGMT());                 // server UTC offset (DST-safe)
-//    const int sessionTZ = Inp_Session_Hours_Are_UTC ? 0 : Inp_Session_TZ_Offset_Hours*3600;
-
-//    // --------- LONDON ----------
-//    if(Inp_Session_Allow_London)
-//    {
-//       datetime t1 = serverMidnight + Inp_London_Start_Hour*3600 + (serverTZ - sessionTZ); // FIX: apply (server - session)
-//       datetime t2 = serverMidnight + Inp_London_End_Hour  *3600 + (serverTZ - sessionTZ);
-//       if(t2 <= t1) t2 += 24*3600;
-
-//       string s1 = "SESSION_LONDON_START", s2 = "SESSION_LONDON_END";
-//       if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
-//       if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
-//       ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_London);
-//       ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_London);
-//       ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
-//       ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
-//       ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
-//       ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
-//       ObjectSetInteger(0,s1,OBJPROP_BACK,true);
-//       ObjectSetInteger(0,s2,OBJPROP_BACK,true);
-//    }
-
-//    // --------- NY FIRST HALF ----------
-//    if(Inp_Session_Allow_NY_FirstHalf)
-//    {
-//       datetime t1 = serverMidnight + Inp_NY1_Start_Hour*3600 + (serverTZ - sessionTZ);   // FIX
-//       datetime t2 = serverMidnight + Inp_NY1_End_Hour  *3600 + (serverTZ - sessionTZ);
-//       if(t2 <= t1) t2 += 24*3600;
-
-//       string s1 = "SESSION_NY1_START", s2 = "SESSION_NY1_END";
-//       if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
-//       if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
-//       ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_NY1);
-//       ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_NY1);
-//       ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
-//       ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
-//       ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
-//       ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
-//       ObjectSetInteger(0,s1,OBJPROP_BACK,true);
-//       ObjectSetInteger(0,s2,OBJPROP_BACK,true);
-//    }
-
-//    // --------- ASIA (optional) ----------
-//    if(Inp_Session_Allow_Asia)
-//    {
-//       datetime t1 = serverMidnight + Inp_Asia_Start_Hour*3600 + (serverTZ - sessionTZ);  // FIX
-//       datetime t2 = serverMidnight + Inp_Asia_End_Hour  *3600 + (serverTZ - sessionTZ);
-//       if(t2 <= t1) t2 += 24*3600;
-
-//       string s1 = "SESSION_ASIA_START", s2 = "SESSION_ASIA_END";
-//       if(ObjectFind(0,s1)<0) ObjectCreate(0,s1,OBJ_VLINE,0,t1,0); else ObjectMove(0,s1,0,t1,0);
-//       if(ObjectFind(0,s2)<0) ObjectCreate(0,s2,OBJ_VLINE,0,t2,0); else ObjectMove(0,s2,0,t2,0);
-//       ObjectSetInteger(0,s1,OBJPROP_COLOR, Inp_SessionColor_Asia);
-//       ObjectSetInteger(0,s2,OBJPROP_COLOR, Inp_SessionColor_Asia);
-//       ObjectSetInteger(0,s1,OBJPROP_STYLE, Inp_SessionLineStyle);
-//       ObjectSetInteger(0,s2,OBJPROP_STYLE, Inp_SessionLineStyle);
-//       ObjectSetInteger(0,s1,OBJPROP_WIDTH, Inp_SessionLineWidth);
-//       ObjectSetInteger(0,s2,OBJPROP_WIDTH, Inp_SessionLineWidth);
-//       ObjectSetInteger(0,s1,OBJPROP_BACK,true);
-//       ObjectSetInteger(0,s2,OBJPROP_BACK,true);
-//    }
-// }
 
  void DrawOneSessionWindow(const string startName,
                           const string endName,
